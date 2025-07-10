@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Layer Thickness Measurement</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='thickness.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>Layer Thickness Measurement</h1>
+        
+        <!-- File Upload Section -->
+        <div class="upload-section">
+            <h2>Upload EMD File</h2>
+            <input type="file" id="fileInput" accept=".emd">
+            <button id="uploadBtn">Upload</button>
+            <div id="uploadStatus"></div>
+        </div>
+        
+        <!-- Image Selection Section -->
+        <div class="image-selection" id="imageSelection" style="display: none;">
+            <h2>Select Image</h2>
+            <div id="imageOptions"></div>
+            <div id="selectionStatus"></div>
+        </div>
+        
+        <!-- Preprocessing Section -->
+        <div class="preprocessing-section" id="preprocessingSection" style="display: none;">
+            <h2>Preprocessing</h2>
+            <div class="image-info" id="imageInfo"></div>
+            <div class="controls">
+                <label>Smoothing Sigma: <input type="number" id="sigma" value="4.0" step="0.1" min="0.1" max="10.0"></label>
+                <button id="preprocessBtn">Apply Preprocessing</button>
+            </div>
+            <div id="preprocessStatus"></div>
+        </div>
+        
+        <!-- Peak Detection Section -->
+        <div class="peak-detection-section" id="peakDetectionSection" style="display: none;">
+            <h2>Automatic Peak Detection</h2>
+            <div class="controls">
+                <label>Distance: <input type="number" id="distance" value="30" min="1" max="200"></label>
+                <label>Height: <input type="number" id="height" value="0.001" step="0.001" min="0.001" max="1.0"></label>
+                <label>Top N: <input type="number" id="topN" value="100" min="1" max="500"></label>
+                <button id="detectPeaksBtn">Detect Peaks</button>
+            </div>
+            <div id="peakDetectionStatus"></div>
+        </div>
+        
+        <!-- Manual Peak Addition Section -->
+        <div class="manual-peak-section" id="manualPeakSection" style="display: none;">
+            <h2>Manual Interface Addition</h2>
+            <div class="controls">
+                <label>Y Start: <input type="number" id="yStart" value="0" min="0"></label>
+                <label>Y End: <input type="number" id="yEnd" value="100" min="0"></label>
+                <button id="addManualPeakBtn">Add Interface in Range</button>
+            </div>
+            <div id="manualPeaksList"></div>
+            <div id="manualPeakStatus"></div>
+        </div>
+        
+        <!-- Analysis Display -->
+        <div class="analysis-display" id="analysisDisplay" style="display: none;">
+            <h2>Analysis Results</h2>
+            <div class="analysis-plot">
+                <img id="analysisPlot" src="" alt="Analysis Plot">
+            </div>
+            <div class="analysis-controls">
+                <button id="calculateThicknessBtn">Calculate Layer Thickness</button>
+                <button id="resetAnalysisBtn">Reset Analysis</button>
+            </div>
+        </div>
+        
+        <!-- Results Section -->
+        <div class="results-section" id="resultsSection" style="display: none;">
+            <h2>Thickness Results</h2>
+            <div id="thicknessStats"></div>
+            <div id="thicknessTable"></div>
+        </div>
+    </div>
+    
+    <script>
+        let imageShape = null;
+        let currentImageIndex = null;
+        
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+        
+        function showError(elementId, message) {
+            const element = document.getElementById(elementId);
+            element.innerHTML = `<div class="error">Error: ${message}</div>`;
+        }
+        
+        function showSuccess(elementId, message) {
+            const element = document.getElementById(elementId);
+            element.innerHTML = `<div class="success">${message}</div>`;
+        }
+        
+        function showInfo(elementId, message) {
+            const element = document.getElementById(elementId);
+            element.innerHTML = `<div class="info">${message}</div>`;
+        }
+        
+        function updateManualPeaksList(manualPeaks) {
+            const listElement = document.getElementById('manualPeaksList');
+            if (manualPeaks.length === 0) {
+                listElement.innerHTML = '<p>No manual interfaces added</p>';
+                return;
+            }
+            
+            let html = '<h4>Manual Interfaces:</h4><ul>';
+            manualPeaks.forEach(peak => {
+                html += `<li>Y = ${peak} <button onclick="removeManualPeak(${peak})">Remove</button></li>`;
+            });
+            html += '</ul>';
+            listElement.innerHTML = html;
+        }
+        
+        function removeManualPeak(peak) {
+            fetch('/remove_manual_peak', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    peak: peak
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showSuccess('manualPeakStatus', `Interface at Y=${data.peak_removed} removed`);
+                    document.getElementById('analysisPlot').src = 'data:image/png;base64,' + data.plot;
+                    updateManualPeaksList(data.manual_peaks);
+                } else {
+                    showError('manualPeakStatus', data.error);
+                }
+            })
+            .catch(error => {
+                showError('manualPeakStatus', 'Network error: ' + error.message);
+            });
+        }
+        
+        // Upload functionality
+        document.getElementById('uploadBtn').addEventListener('click', function() {
+            const fileInput = document.getElementById('fileInput');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                showError('uploadStatus', 'Please select a file');
+                return;
+            }
+            
+            if (!file.name.endsWith('.emd')) {
+                showError('uploadStatus', 'Please select an EMD file');
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            showInfo('uploadStatus', `Uploading ${file.name} (${formatFileSize(file.size)})...`);
+            document.getElementById('uploadBtn').disabled = true;
+            
+            fetch('/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('uploadBtn').disabled = false;
+                
+                if (data.success) {
+                    showSuccess('uploadStatus', `Upload successful! File: ${formatFileSize(data.file_size)}`);
+                    
+                    const imageOptions = document.getElementById('imageOptions');
+                    imageOptions.innerHTML = '';
+                    
+                    data.images.forEach((img, index) => {
+                        const option = document.createElement('div');
+                        option.className = 'image-option';
+                        option.innerHTML = `
+                            <div class="image-preview">
+                                <img src="data:image/png;base64,${img.preview}" alt="Image ${index}">
+                            </div>
+                            <div class="image-details">
+                                <h4>Image ${index}</h4>
+                                <p><strong>Shape:</strong> ${img.shape[0]} × ${img.shape[1]} pixels</p>
+                                <p><strong>Type:</strong> ${img.dtype}</p>
+                                <p><strong>Pixel Size:</strong> ${img.pixel_size.toFixed(4)} nm</p>
+                                <button onclick="selectImage(${index})">Select This Image</button>
+                            </div>
+                        `;
+                        imageOptions.appendChild(option);
+                    });
+                    
+                    document.getElementById('imageSelection').style.display = 'block';
+                } else {
+                    showError('uploadStatus', data.error);
+                }
+            })
+            .catch(error => {
+                document.getElementById('uploadBtn').disabled = false;
+                showError('uploadStatus', 'Network error: ' + error.message);
+            });
+        });
+        
+        function selectImage(index) {
+            currentImageIndex = index;
+            showInfo('selectionStatus', 'Loading image...');
+            
+            fetch('/select_image', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    index: index
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showSuccess('selectionStatus', 'Image loaded successfully!');
+                    imageShape = data.image_shape;
+                    
+                    document.getElementById('imageInfo').innerHTML = `
+                        <p><strong>Image Shape:</strong> ${imageShape[0]} × ${imageShape[1]} pixels</p>
+                        <p><strong>Pixel Size:</strong> ${data.pixel_size.toFixed(4)} nm</p>
+                        <p><strong>Image Type:</strong> Normalized (0-1 range)</p>
+                    `;
+                    
+                    // Update Y range limits
+                    document.getElementById('yStart').max = imageShape[0];
+                    document.getElementById('yEnd').max = imageShape[0];
+                    document.getElementById('yEnd').value = Math.min(100, imageShape[0]);
+                    
+                    document.getElementById('preprocessingSection').style.display = 'block';
+                } else {
+                    showError('selectionStatus', data.error);
+                }
+            })
+            .catch(error => {
+                showError('selectionStatus', 'Network error: ' + error.message);
+            });
+        }
+        
+        // Preprocessing
+        document.getElementById('preprocessBtn').addEventListener('click', function() {
+            const sigma = parseFloat(document.getElementById('sigma').value);
+            
+            showInfo('preprocessStatus', 'Applying preprocessing...');
+            document.getElementById('preprocessBtn').disabled = true;
+            
+            fetch('/preprocess', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    sigma: sigma
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('preprocessBtn').disabled = false;
+                
+                if (data.success) {
+                    showSuccess('preprocessStatus', 'Preprocessing complete!');
+                    
+                    document.getElementById('analysisPlot').src = 'data:image/png;base64,' + data.plot;
+                    document.getElementById('analysisDisplay').style.display = 'block';
+                    document.getElementById('peakDetectionSection').style.display = 'block';
+                    document.getElementById('manualPeakSection').style.display = 'block';
+                } else {
+                    showError('preprocessStatus', data.error);
+                }
+            })
+            .catch(error => {
+                document.getElementById('preprocessBtn').disabled = false;
+                showError('preprocessStatus', 'Network error: ' + error.message);
+            });
+        });
+        
+        // Peak Detection
+        document.getElementById('detectPeaksBtn').addEventListener('click', function() {
+            const distance = parseInt(document.getElementById('distance').value);
+            const height = parseFloat(document.getElementById('height').value);
+            const topN = parseInt(document.getElementById('topN').value);
+            
+            showInfo('peakDetectionStatus', 'Detecting peaks...');
+            document.getElementById('detectPeaksBtn').disabled = true;
+            
+            fetch('/detect_peaks', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    distance: distance,
+                    height: height,
+                    top_n: topN
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('detectPeaksBtn').disabled = false;
+                
+                if (data.success) {
+                    showSuccess('peakDetectionStatus', `Found ${data.peaks_found} interfaces`);
+                    document.getElementById('analysisPlot').src = 'data:image/png;base64,' + data.plot;
+                } else {
+                    showError('peakDetectionStatus', data.error);
+                }
+            })
+            .catch(error => {
+                document.getElementById('detectPeaksBtn').disabled = false;
+                showError('peakDetectionStatus', 'Network error: ' + error.message);
+            });
+        });
+        
+        // Manual Peak Addition
+        document.getElementById('addManualPeakBtn').addEventListener('click', function() {
+            const yStart = parseInt(document.getElementById('yStart').value);
+            const yEnd = parseInt(document.getElementById('yEnd').value);
+            
+            if (yStart >= yEnd) {
+                showError('manualPeakStatus', 'Y Start must be less than Y End');
+                return;
+            }
+            
+            showInfo('manualPeakStatus', 'Adding manual interface...');
+            document.getElementById('addManualPeakBtn').disabled = true;
+            
+            fetch('/add_manual_peak', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    y_start: yStart,
+                    y_end: yEnd
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('addManualPeakBtn').disabled = false;
+                
+                if (data.success) {
+                    showSuccess('manualPeakStatus', `Interface added at Y=${data.peak_added}`);
+                    document.getElementById('analysisPlot').src = 'data:image/png;base64,' + data.plot;
+                    updateManualPeaksList(data.manual_peaks);
+                } else {
+                    showError('manualPeakStatus', data.error);
+                }
+            })
+            .catch(error => {
+                document.getElementById('addManualPeakBtn').disabled = false;
+                showError('manualPeakStatus', 'Network error: ' + error.message);
+            });
+        });
+        
+        // Calculate Thickness
+        document.getElementById('calculateThicknessBtn').addEventListener('click', function() {
+            showInfo('manualPeakStatus', 'Calculating thickness...');
+            
+            fetch('/calculate_thickness', {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showSuccess('manualPeakStatus', 'Thickness calculated successfully!');
+                    
+                    // Update statistics
+                    document.getElementById('thicknessStats').innerHTML = `
+                        <div class="stats-grid">
+                            <div class="stat-item">
+                                <strong>Total Layers:</strong> ${data.stats.total_layers}
+                            </div>
+                            <div class="stat-item">
+                                <strong>Mean Thickness:</strong> ${data.stats.mean_thickness.toFixed(2)} nm
+                            </div>
+                            <div class="stat-item">
+                                <strong>Std Thickness:</strong> ${data.stats.std_thickness.toFixed(2)} nm
+                            </div>
+                            <div class="stat-item">
+                                <strong>Min Thickness:</strong> ${data.stats.min_thickness.toFixed(2)} nm
+                            </div>
+                            <div class="stat-item">
+                                <strong>Max Thickness:</strong> ${data.stats.max_thickness.toFixed(2)} nm
+                            </div>
+                            <div class="stat-item">
+                                <strong>Pixel Size:</strong> ${data.stats.pixel_size.toFixed(4)} nm
+                            </div>
+                        </div>
+                    `;
+                    
+                    // Update thickness table
+                    let tableHtml = '<table><thead><tr><th>Layer</th><th>Start Interface</th><th>End Interface</th><th>Thickness (pixels)</th><th>Thickness (nm)</th></tr></thead><tbody>';
+                    data.thicknesses.forEach(thickness => {
+                        tableHtml += `
+                            <tr>
+                                <td>${thickness.layer}</td>
+                                <td>${thickness.start_interface}</td>
+                                <td>${thickness.end_interface}</td>
+                                <td>${thickness.thickness_pixels}</td>
+                                <td>${thickness.thickness_nm.toFixed(2)}</td>
+                            </tr>
+                        `;
+                    });
+                    tableHtml += '</tbody></table>';
+                    document.getElementById('thicknessTable').innerHTML = tableHtml;
+                    
+                    document.getElementById('resultsSection').style.display = 'block';
+                } else {
+                    showError('manualPeakStatus', data.error);
+                }
+            })
+            .catch(error => {
+                showError('manualPeakStatus', 'Network error: ' + error.message);
+            });
+        });
+        
+        // Reset Analysis
+        document.getElementById('resetAnalysisBtn').addEventListener('click', function() {
+            fetch('/reset_analysis', {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showSuccess('preprocessStatus', 'Analysis reset successfully!');
+                    document.getElementById('analysisDisplay').style.display = 'none';
+                    document.getElementById('peakDetectionSection').style.display = 'none';
+                    document.getElementById('manualPeakSection').style.display = 'none';
+                    document.getElementById('resultsSection').style.display = 'none';
+                    updateManualPeaksList([]);
+                }
+            })
+            .catch(error => {
+                showError('preprocessStatus', 'Network error: ' + error.message);
+            });
+        });
+    </script>
+</body>
+</html>
