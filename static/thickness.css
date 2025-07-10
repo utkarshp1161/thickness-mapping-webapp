@@ -19,7 +19,7 @@ h1, h2, h3 {
 }
 
 .upload-section, .image-selection, .preprocessing-section, .peak-detection-section, 
-.manual-peak-section, .analysis-display, .results-section {
+.manual-peak-section, .interface-management-section, .analysis-display, .results-section {
     margin-bottom: 30px;
     padding: 20px;
     border: 1px solid #ddd;
@@ -78,6 +78,32 @@ h1, h2, h3 {
     border: 1px solid #ddd;
     border-radius: 3px;
     width: 100px;
+}
+
+.coordinate-controls {
+    background-color: #f8f9fa;
+    padding: 15px;
+    border-radius: 5px;
+    margin: 15px 0;
+    border: 1px solid #dee2e6;
+}
+
+.coordinate-controls h4 {
+    margin-top: 0;
+    color: #495057;
+}
+
+.selection-info {
+    margin-top: 10px;
+    padding: 10px;
+    background-color: #e9ecef;
+    border-radius: 3px;
+}
+
+.selection-info p {
+    margin: 5px 0;
+    font-size: 0.9em;
+    color: #6c757d;
 }
 
 .image-info {
@@ -153,6 +179,80 @@ h1, h2, h3 {
     gap: 15px;
     justify-content: center;
     margin: 15px 0;
+    flex-wrap: wrap;
+}
+
+.interface-controls {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+    margin: 15px 0;
+}
+
+.interfaces-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 10px;
+    margin-top: 15px;
+}
+
+.interface-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    border-radius: 5px;
+    border: 1px solid #ddd;
+}
+
+.interface-item.auto {
+    background-color: #e0f7fa;
+    border-color: #00bcd4;
+}
+
+.interface-item.manual {
+    background-color: #ffebee;
+    border-color: #f44336;
+}
+
+.interface-position {
+    font-weight: bold;
+    font-size: 1.1em;
+}
+
+.interface-type {
+    text-transform: uppercase;
+    font-size: 0.8em;
+    padding: 2px 6px;
+    border-radius: 3px;
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+}
+
+.interface-item.auto .interface-type {
+    background-color: #00bcd4;
+    color: white;
+    border-color: #00bcd4;
+}
+
+.interface-item.manual .interface-type {
+    background-color: #f44336;
+    color: white;
+    border-color: #f44336;
+}
+
+.remove-btn {
+    padding: 5px 10px;
+    font-size: 0.8em;
+    background-color: #dc3545;
+    color: white;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+}
+
+.remove-btn:hover {
+    background-color: #c82333;
 }
 
 .analysis-plot {
@@ -207,6 +307,22 @@ button:disabled {
 
 #clearManualPeaksBtn:hover {
     background-color: #c82333;
+}
+
+#refreshInterfacesBtn {
+    background-color: #17a2b8;
+}
+
+#refreshInterfacesBtn:hover {
+    background-color: #138496;
+}
+
+#loadInterfacesBtn {
+    background-color: #6f42c1;
+}
+
+#loadInterfacesBtn:hover {
+    background-color: #5a2d91;
 }
 
 .error {
@@ -266,38 +382,6 @@ table th {
 
 table tr:nth-child(even) {
     background-color: #f9f9f9;
-}
-
-#manualPeaksList {
-    margin-top: 15px;
-    padding: 10px;
-    background-color: #f8f9fa;
-    border-radius: 5px;
-}
-
-#manualPeaksList ul {
-    list-style-type: none;
-    padding: 0;
-}
-
-#manualPeaksList li {
-    margin: 5px 0;
-    padding: 5px;
-    background-color: white;
-    border-radius: 3px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-#manualPeaksList button {
-    padding: 2px 8px;
-    font-size: 12px;
-    background-color: #dc3545;
-}
-
-#manualPeaksList button:hover {
-    background-color: #c82333;
 }
 
 #imageOptions {

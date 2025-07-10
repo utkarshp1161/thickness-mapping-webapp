@@ -387,32 +387,43 @@ def add_manual_peak_region():
         print(f"Error adding manual peak: {e}")
         return jsonify({'error': f'Error adding manual peak: {str(e)}'})
 
-@app.route('/remove_manual_peak', methods=['POST'])
-def remove_manual_peak():
-    global manual_peaks
+@app.route('/remove_interface', methods=['POST'])
+def remove_interface():
+    global detected_peaks, manual_peaks
     
     data = request.json
     peak_to_remove = int(data.get('peak', 0))
     
     try:
+        removed_from = None
+        
+        # Try to remove from manual peaks first
         if peak_to_remove in manual_peaks:
             manual_peaks.remove(peak_to_remove)
-            
-            # Generate updated analysis plot
-            plot_base64 = generate_analysis_plot()
-            
-            return jsonify({
-                'success': True,
-                'plot': plot_base64,
-                'peak_removed': peak_to_remove,
-                'manual_peaks': manual_peaks
-            })
+            removed_from = "manual"
+        # Then try to remove from detected peaks
+        elif detected_peaks is not None and peak_to_remove in detected_peaks:
+            detected_peaks.remove(peak_to_remove)
+            removed_from = "auto"
         else:
-            return jsonify({'error': 'Peak not found in manual peaks'})
-            
+            return jsonify({'error': 'Interface not found'})
+        
+        # Generate updated analysis plot
+        plot_base64 = generate_analysis_plot()
+        
+        return jsonify({
+            'success': True,
+            'plot': plot_base64,
+            'peak_removed': peak_to_remove,
+            'removed_from': removed_from,
+            'manual_peaks': manual_peaks,
+            'auto_peaks': detected_peaks if detected_peaks is not None else [],
+            'message': f'Interface at Y={peak_to_remove} removed from {removed_from} interfaces'
+        })
+        
     except Exception as e:
-        print(f"Error removing manual peak: {e}")
-        return jsonify({'error': f'Error removing manual peak: {str(e)}'})
+        print(f"Error removing interface: {e}")
+        return jsonify({'error': f'Error removing interface: {str(e)}'})
 
 @app.route('/calculate_thickness', methods=['POST'])
 def calculate_thickness():
@@ -493,6 +504,37 @@ def clear_manual_peaks():
         'success': True,
         'plot': plot_base64,
         'message': 'All manual interfaces cleared'
+    })
+
+@app.route('/get_all_interfaces', methods=['GET'])
+def get_all_interfaces():
+    global detected_peaks, manual_peaks
+    
+    # Combine all peaks with their types
+    all_interfaces = []
+    
+    if detected_peaks is not None:
+        for peak in detected_peaks:
+            all_interfaces.append({
+                'y_position': peak,
+                'type': 'auto',
+                'color': 'cyan'
+            })
+    
+    for peak in manual_peaks:
+        all_interfaces.append({
+            'y_position': peak,
+            'type': 'manual',
+            'color': 'red'
+        })
+    
+    # Sort by Y position
+    all_interfaces.sort(key=lambda x: x['y_position'])
+    
+    return jsonify({
+        'success': True,
+        'interfaces': all_interfaces,
+        'total_count': len(all_interfaces)
     })
 
 if __name__ == '__main__':

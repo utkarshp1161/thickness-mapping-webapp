@@ -64,13 +64,37 @@
                 </div>
             </div>
             
+            <!-- Coordinate Controls -->
+            <div class="coordinate-controls">
+                <h4>Selection Coordinates</h4>
+                <div class="controls">
+                    <label>X Start: <input type="number" id="xStart" value="0" min="0"></label>
+                    <label>X End: <input type="number" id="xEnd" value="100" min="0"></label>
+                    <label>Y Start: <input type="number" id="yStart" value="0" min="0"></label>
+                    <label>Y End: <input type="number" id="yEnd" value="100" min="0"></label>
+                </div>
+                <div class="selection-info" id="selectionInfo">
+                    <p><em>Use mouse to drag selection box or enter coordinates manually</em></p>
+                </div>
+            </div>
+            
             <div class="manual-controls">
                 <button id="addSelectedRegionBtn" disabled>Add Interface from Selected Region</button>
                 <button id="clearManualPeaksBtn">Clear All Manual Interfaces</button>
+                <button id="refreshInterfacesBtn">Refresh Interface List</button>
             </div>
             
-            <div id="manualPeaksList"></div>
             <div id="manualPeakStatus"></div>
+        </div>
+        
+        <!-- Interface Management Section -->
+        <div class="interface-management-section" id="interfaceManagementSection" style="display: none;">
+            <h2>Interface Management</h2>
+            <div class="interface-controls">
+                <button id="loadInterfacesBtn">Load All Interfaces</button>
+            </div>
+            <div id="interfacesList"></div>
+            <div id="interfaceManagementStatus"></div>
         </div>
         
         <!-- Analysis Display -->
@@ -150,6 +174,57 @@
             };
         }
         
+        function updateSelectionFromInputs() {
+            const xStart = parseInt(document.getElementById('xStart').value);
+            const xEnd = parseInt(document.getElementById('xEnd').value);
+            const yStart = parseInt(document.getElementById('yStart').value);
+            const yEnd = parseInt(document.getElementById('yEnd').value);
+            
+            if (imageShape && imageElement) {
+                const overlay = document.getElementById('selectionOverlay');
+                const rect = imageElement.getBoundingClientRect();
+                
+                // Calculate scale factors
+                const scaleX = rect.width / imageElement.naturalWidth;
+                const scaleY = rect.height / imageElement.naturalHeight;
+                
+                // Convert image coordinates to display coordinates
+                // X (rows) maps to Y display coordinate (top/height)
+                // Y (columns) maps to X display coordinate (left/width)
+                const displayLeft = Math.round(yStart * scaleX);
+                const displayTop = Math.round(xStart * scaleY);
+                const displayWidth = Math.round((yEnd - yStart) * scaleX);
+                const displayHeight = Math.round((xEnd - xStart) * scaleY);
+                
+                overlay.style.left = `${displayLeft}px`;
+                overlay.style.top = `${displayTop}px`;
+                overlay.style.width = `${displayWidth}px`;
+                overlay.style.height = `${displayHeight}px`;
+                overlay.style.display = 'block';
+                
+                // Update selection box
+                selectionBox = {
+                    startX: yStart,
+                    startY: xStart,
+                    endX: yEnd,
+                    endY: xEnd
+                };
+                
+                // Update selection info
+                document.getElementById('selectionInfo').innerHTML = `
+                    <p><strong>Selected Region:</strong> x[${xStart}:${xEnd}], y[${yStart}:${yEnd}]</p>
+                    <p><strong>Size:</strong> ${xEnd - xStart} × ${yEnd - yStart} pixels</p>
+                `;
+                
+                // Enable add button if selection is valid
+                if (xEnd - xStart > 5 && yEnd - yStart > 5) {
+                    document.getElementById('addSelectedRegionBtn').disabled = false;
+                } else {
+                    document.getElementById('addSelectedRegionBtn').disabled = true;
+                }
+            }
+        }
+        
         function setupImageInteraction() {
             imageElement = document.getElementById('smoothedImage');
             const overlay = document.getElementById('selectionOverlay');
@@ -171,14 +246,6 @@
                 
                 startX = coords.imageX;
                 startY = coords.imageY;
-                
-                // Store selection box coordinates
-                selectionBox = {
-                    startX: startX,
-                    startY: startY,
-                    endX: startX,
-                    endY: startY
-                };
                 
                 overlay.style.left = `${coords.displayX}px`;
                 overlay.style.top = `${coords.displayY}px`;
@@ -205,12 +272,6 @@
                 overlay.style.top = `${top}px`;
                 overlay.style.width = `${width}px`;
                 overlay.style.height = `${height}px`;
-                
-                // Update selection box
-                if (selectionBox) {
-                    selectionBox.endX = coords.imageX;
-                    selectionBox.endY = coords.imageY;
-                }
             }
             
             function handleMouseUp(e) {
@@ -223,70 +284,112 @@
                 const endX = coords.imageX;
                 const endY = coords.imageY;
                 
+                // Calculate the selection bounds
+                // Image coordinates: X = rows (vertical), Y = columns (horizontal)
+                const minX = Math.max(0, Math.min(startY, endY));  // startY/endY map to X (rows)
+                const maxX = Math.min(imageShape[0], Math.max(startY, endY));
+                const minY = Math.max(0, Math.min(startX, endX));  // startX/endX map to Y (columns)
+                const maxY = Math.min(imageShape[1], Math.max(startX, endX));
+                
+                // Update input fields
+                document.getElementById('xStart').value = minX;
+                document.getElementById('xEnd').value = maxX;
+                document.getElementById('yStart').value = minY;
+                document.getElementById('yEnd').value = maxY;
+                
                 // Update selection box
-                if (selectionBox) {
-                    selectionBox.endX = endX;
-                    selectionBox.endY = endY;
-                    
-                    // Enable add button if selection is valid
-                    const minX = Math.min(selectionBox.startX, selectionBox.endX);
-                    const maxX = Math.max(selectionBox.startX, selectionBox.endX);
-                    const minY = Math.min(selectionBox.startY, selectionBox.endY);
-                    const maxY = Math.max(selectionBox.startY, selectionBox.endY);
-                    
-                    if (maxX - minX > 5 && maxY - minY > 5) {
-                        document.getElementById('addSelectedRegionBtn').disabled = false;
-                        showInfo('manualPeakStatus', 
-                            `Selection: x[${minX}:${maxX}], y[${minY}:${maxY}]. Click "Add Interface" to detect interface in this region.`);
-                    } else {
-                        document.getElementById('addSelectedRegionBtn').disabled = true;
-                        showError('manualPeakStatus', 'Selection too small. Please select a larger region.');
-                    }
+                selectionBox = {
+                    startX: minY,
+                    startY: minX,
+                    endX: maxY,
+                    endY: maxX
+                };
+                
+                // Update selection info
+                document.getElementById('selectionInfo').innerHTML = `
+                    <p><strong>Selected Region:</strong> x[${minX}:${maxX}], y[${minY}:${maxY}]</p>
+                    <p><strong>Size:</strong> ${maxX - minX} × ${maxY - minY} pixels</p>
+                `;
+                
+                // Enable add button if selection is valid
+                if (maxX - minX > 5 && maxY - minY > 5) {
+                    document.getElementById('addSelectedRegionBtn').disabled = false;
+                } else {
+                    document.getElementById('addSelectedRegionBtn').disabled = true;
                 }
                 
                 document.removeEventListener('mousemove', handleMouseMove);
                 document.removeEventListener('mouseup', handleMouseUp);
             }
-        }
-        
-        function updateManualPeaksList(manualPeaks) {
-            const listElement = document.getElementById('manualPeaksList');
-            if (manualPeaks.length === 0) {
-                listElement.innerHTML = '<p>No manual interfaces added</p>';
-                return;
-            }
             
-            let html = '<h4>Manual Interfaces:</h4><ul>';
-            manualPeaks.forEach(peak => {
-                html += `<li>Y = ${peak} <button onclick="removeManualPeak(${peak})">Remove</button></li>`;
+            // Add event listeners to input fields
+            ['xStart', 'xEnd', 'yStart', 'yEnd'].forEach(id => {
+                document.getElementById(id).addEventListener('input', updateSelectionFromInputs);
             });
-            html += '</ul>';
-            listElement.innerHTML = html;
         }
         
-        function removeManualPeak(peak) {
-            fetch('/remove_manual_peak', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    peak: peak
-                })
-            })
+        function loadAllInterfaces() {
+            fetch('/get_all_interfaces')
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    showSuccess('manualPeakStatus', `Interface at Y=${data.peak_removed} removed`);
-                    document.getElementById('analysisPlot').src = 'data:image/png;base64,' + data.plot;
-                    updateManualPeaksList(data.manual_peaks);
+                    updateInterfacesList(data.interfaces);
+                    showSuccess('interfaceManagementStatus', `Loaded ${data.total_count} interfaces`);
                 } else {
-                    showError('manualPeakStatus', data.error);
+                    showError('interfaceManagementStatus', 'Failed to load interfaces');
                 }
             })
             .catch(error => {
-                showError('manualPeakStatus', 'Network error: ' + error.message);
+                showError('interfaceManagementStatus', 'Network error: ' + error.message);
             });
+        }
+        
+        function updateInterfacesList(interfaces) {
+            const listElement = document.getElementById('interfacesList');
+            if (interfaces.length === 0) {
+                listElement.innerHTML = '<p>No interfaces detected or added</p>';
+                return;
+            }
+            
+            let html = '<h4>All Interfaces:</h4><div class="interfaces-grid">';
+            interfaces.forEach((interface, index) => {
+                html += `
+                    <div class="interface-item ${interface.type}">
+                        <span class="interface-position">Y = ${interface.y_position}</span>
+                        <span class="interface-type">${interface.type}</span>
+                        <button class="remove-btn" onclick="removeInterface(${interface.y_position})">Remove</button>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            listElement.innerHTML = html;
+        }
+        
+        function removeInterface(peak) {
+            if (confirm(`Are you sure you want to remove interface at Y=${peak}?`)) {
+                fetch('/remove_interface', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        peak: peak
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showSuccess('interfaceManagementStatus', data.message);
+                        document.getElementById('analysisPlot').src = 'data:image/png;base64,' + data.plot;
+                        loadAllInterfaces(); // Refresh the list
+                    } else {
+                        showError('interfaceManagementStatus', data.error);
+                    }
+                })
+                .catch(error => {
+                    showError('interfaceManagementStatus', 'Network error: ' + error.message);
+                });
+            }
         }
         
         // Upload functionality
@@ -378,10 +481,19 @@
                         <p><strong>Image Type:</strong> Normalized (0-1 range)</p>
                     `;
                     
+                    // Update coordinate input limits
+                    document.getElementById('xStart').max = imageShape[0];
+                    document.getElementById('xEnd').max = imageShape[0];
+                    document.getElementById('xEnd').value = Math.min(100, imageShape[0]);
+                    document.getElementById('yStart').max = imageShape[1];
+                    document.getElementById('yEnd').max = imageShape[1];
+                    document.getElementById('yEnd').value = Math.min(100, imageShape[1]);
+                    
                     // Reset sections
                     document.getElementById('analysisDisplay').style.display = 'none';
                     document.getElementById('peakDetectionSection').style.display = 'none';
                     document.getElementById('manualPeakSection').style.display = 'none';
+                    document.getElementById('interfaceManagementSection').style.display = 'none';
                     document.getElementById('resultsSection').style.display = 'none';
                     
                     document.getElementById('preprocessingSection').style.display = 'block';
@@ -425,16 +537,15 @@
                     document.getElementById('analysisDisplay').style.display = 'block';
                     document.getElementById('peakDetectionSection').style.display = 'block';
                     document.getElementById('manualPeakSection').style.display = 'block';
+                    document.getElementById('interfaceManagementSection').style.display = 'block';
                     
                     // Setup image interaction after image loads
                     const smoothedImg = document.getElementById('smoothedImage');
                     smoothedImg.style.display = 'block';
                     smoothedImg.onload = function() {
                         setupImageInteraction();
+                        updateSelectionFromInputs();
                     };
-                    
-                    // Reset manual peaks list
-                    updateManualPeaksList([]);
                 } else {
                     showError('preprocessStatus', data.error);
                 }
@@ -472,6 +583,7 @@
                 if (data.success) {
                     showSuccess('peakDetectionStatus', `Found ${data.peaks_found} interfaces`);
                     document.getElementById('analysisPlot').src = 'data:image/png;base64,' + data.plot;
+                    loadAllInterfaces(); // Refresh interface list
                 } else {
                     showError('peakDetectionStatus', data.error);
                 }
@@ -484,15 +596,15 @@
         
         // Add Selected Region
         document.getElementById('addSelectedRegionBtn').addEventListener('click', function() {
-            if (!selectionBox) {
-                showError('manualPeakStatus', 'No region selected');
+            const xStart = parseInt(document.getElementById('xStart').value);
+            const xEnd = parseInt(document.getElementById('xEnd').value);
+            const yStart = parseInt(document.getElementById('yStart').value);
+            const yEnd = parseInt(document.getElementById('yEnd').value);
+            
+            if (xStart >= xEnd || yStart >= yEnd) {
+                showError('manualPeakStatus', 'Invalid selection range');
                 return;
             }
-            
-            const minX = Math.min(selectionBox.startX, selectionBox.endX);
-            const maxX = Math.max(selectionBox.startX, selectionBox.endX);
-            const minY = Math.min(selectionBox.startY, selectionBox.endY);
-            const maxY = Math.max(selectionBox.startY, selectionBox.endY);
             
             showInfo('manualPeakStatus', 'Adding interface from selected region...');
             document.getElementById('addSelectedRegionBtn').disabled = true;
@@ -503,10 +615,10 @@
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    x_start: minX,
-                    x_end: maxX,
-                    y_start: minY,
-                    y_end: maxY
+                    x_start: xStart,
+                    x_end: xEnd,
+                    y_start: yStart,
+                    y_end: yEnd
                 })
             })
             .then(response => response.json())
@@ -516,11 +628,7 @@
                 if (data.success) {
                     showSuccess('manualPeakStatus', data.message);
                     document.getElementById('analysisPlot').src = 'data:image/png;base64,' + data.plot;
-                    updateManualPeaksList(data.manual_peaks);
-                    
-                    // Hide selection overlay
-                    document.getElementById('selectionOverlay').style.display = 'none';
-                    selectionBox = null;
+                    loadAllInterfaces(); // Refresh interface list
                 } else {
                     showError('manualPeakStatus', data.error);
                 }
@@ -533,27 +641,35 @@
         
         // Clear Manual Peaks
         document.getElementById('clearManualPeaksBtn').addEventListener('click', function() {
-            fetch('/clear_manual_peaks', {
-                method: 'POST'
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    showSuccess('manualPeakStatus', data.message);
-                    document.getElementById('analysisPlot').src = 'data:image/png;base64,' + data.plot;
-                    updateManualPeaksList([]);
-                } else {
-                    showError('manualPeakStatus', data.error);
-                }
-            })
-            .catch(error => {
-                showError('manualPeakStatus', 'Network error: ' + error.message);
-            });
+            if (confirm('Are you sure you want to clear all manual interfaces?')) {
+                fetch('/clear_manual_peaks', {
+                    method: 'POST'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showSuccess('manualPeakStatus', data.message);
+                        document.getElementById('analysisPlot').src = 'data:image/png;base64,' + data.plot;
+                        loadAllInterfaces(); // Refresh interface list
+                    } else {
+                        showError('manualPeakStatus', data.error);
+                    }
+                })
+                .catch(error => {
+                    showError('manualPeakStatus', 'Network error: ' + error.message);
+                });
+            }
         });
+        
+        // Refresh Interfaces
+        document.getElementById('refreshInterfacesBtn').addEventListener('click', loadAllInterfaces);
+        
+        // Load Interfaces
+        document.getElementById('loadInterfacesBtn').addEventListener('click', loadAllInterfaces);
         
         // Calculate Thickness
         document.getElementById('calculateThicknessBtn').addEventListener('click', function() {
-            showInfo('manualPeakStatus', 'Calculating thickness...');
+            showInfo('interfaceManagementStatus', 'Calculating thickness...');
             
             fetch('/calculate_thickness', {
                 method: 'POST'
@@ -561,7 +677,7 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    showSuccess('manualPeakStatus', 'Thickness calculated successfully!');
+                    showSuccess('interfaceManagementStatus', 'Thickness calculated successfully!');
                     
                     // Update statistics
                     document.getElementById('thicknessStats').innerHTML = `
@@ -614,33 +730,35 @@
                     
                     document.getElementById('resultsSection').style.display = 'block';
                 } else {
-                    showError('manualPeakStatus', data.error);
+                    showError('interfaceManagementStatus', data.error);
                 }
             })
             .catch(error => {
-                showError('manualPeakStatus', 'Network error: ' + error.message);
+                showError('interfaceManagementStatus', 'Network error: ' + error.message);
             });
         });
         
         // Reset Analysis
         document.getElementById('resetAnalysisBtn').addEventListener('click', function() {
-            fetch('/reset_analysis', {
-                method: 'POST'
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    showSuccess('preprocessStatus', 'Analysis reset successfully!');
-                    document.getElementById('analysisDisplay').style.display = 'none';
-                    document.getElementById('peakDetectionSection').style.display = 'none';
-                    document.getElementById('manualPeakSection').style.display = 'none';
-                    document.getElementById('resultsSection').style.display = 'none';
-                    updateManualPeaksList([]);
-                }
-            })
-            .catch(error => {
-                showError('preprocessStatus', 'Network error: ' + error.message);
-            });
+            if (confirm('Are you sure you want to reset the entire analysis?')) {
+                fetch('/reset_analysis', {
+                    method: 'POST'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showSuccess('preprocessStatus', 'Analysis reset successfully!');
+                        document.getElementById('analysisDisplay').style.display = 'none';
+                        document.getElementById('peakDetectionSection').style.display = 'none';
+                        document.getElementById('manualPeakSection').style.display = 'none';
+                        document.getElementById('interfaceManagementSection').style.display = 'none';
+                        document.getElementById('resultsSection').style.display = 'none';
+                    }
+                })
+                .catch(error => {
+                    showError('preprocessStatus', 'Network error: ' + error.message);
+                });
+            }
         });
     </script>
 </body>
