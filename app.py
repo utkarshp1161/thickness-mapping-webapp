@@ -378,11 +378,8 @@ def add_manual_peak_region():
                 'message': f'Interface added at Y={manual_peak} (selected region: x[{x_start}:{x_end}], y[{y_start}:{y_end}])'
             })
         else:
-            return jsonify({
-                'success': False,
-                'error': f'Interface at Y={manual_peak} already exists'
-            })
-        
+            return jsonify({'error': f'Interface at Y={manual_peak} already exists'})
+                
     except Exception as e:
         print(f"Error adding manual peak: {e}")
         return jsonify({'error': f'Error adding manual peak: {str(e)}'})

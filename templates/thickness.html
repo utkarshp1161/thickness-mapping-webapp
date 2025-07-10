@@ -161,8 +161,9 @@
             const mouseY = e.clientY - rect.top;
             
             // Convert to image coordinates
-            const imageX = Math.round((mouseX / imageDisplayWidth) * imageNaturalWidth);
-            const imageY = Math.round((mouseY / imageDisplayHeight) * imageNaturalHeight);
+            // Use floor instead of round to ensure we don't exceed bounds
+            const imageX = Math.floor((mouseX / imageDisplayWidth) * imageNaturalWidth);
+            const imageY = Math.floor((mouseY / imageDisplayHeight) * imageNaturalHeight);
             
             return {
                 displayX: mouseX,
@@ -286,10 +287,10 @@
                 
                 // Calculate the selection bounds
                 // Image coordinates: X = rows (vertical), Y = columns (horizontal)
-                const minX = Math.max(0, Math.min(startY, endY));  // startY/endY map to X (rows)
-                const maxX = Math.min(imageShape[0], Math.max(startY, endY));
-                const minY = Math.max(0, Math.min(startX, endX));  // startX/endX map to Y (columns)
-                const maxY = Math.min(imageShape[1], Math.max(startX, endX));
+                const minX = Math.max(0, Math.min(startX, endX));
+                const maxX = Math.min(imageShape[1] - 1, Math.max(startX, endX));  // Subtract 1
+                const minY = Math.max(0, Math.min(startY, endY));
+                const maxY = Math.min(imageShape[0] - 1, Math.max(startY, endY));  // Use imageShape[0] and subtract 1
                 
                 // Update input fields
                 document.getElementById('xStart').value = minX;
