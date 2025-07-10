@@ -48,14 +48,27 @@
             <div id="peakDetectionStatus"></div>
         </div>
         
-        <!-- Manual Peak Addition Section -->
+        <!-- Interactive Manual Peak Addition Section -->
         <div class="manual-peak-section" id="manualPeakSection" style="display: none;">
-            <h2>Manual Interface Addition</h2>
-            <div class="controls">
-                <label>Y Start: <input type="number" id="yStart" value="0" min="0"></label>
-                <label>Y End: <input type="number" id="yEnd" value="100" min="0"></label>
-                <button id="addManualPeakBtn">Add Interface in Range</button>
+            <h2>Interactive Interface Addition</h2>
+            <div class="interactive-info">
+                <p><strong>Instructions:</strong> Click and drag on the smoothed image below to select a region for interface detection.</p>
+                <p><strong>Selection Box:</strong> The interface will be detected in the Y-range of your selection box.</p>
+                <p><strong>Legend:</strong> <span class="legend-auto">Cyan lines = Auto-detected interfaces</span>, <span class="legend-manual">Red lines = Manual interfaces</span></p>
             </div>
+            
+            <div class="image-container">
+                <div class="image-wrapper">
+                    <img id="smoothedImage" src="" alt="Smoothed Image" style="display: none;">
+                    <div class="selection-overlay" id="selectionOverlay"></div>
+                </div>
+            </div>
+            
+            <div class="manual-controls">
+                <button id="addSelectedRegionBtn" disabled>Add Interface from Selected Region</button>
+                <button id="clearManualPeaksBtn">Clear All Manual Interfaces</button>
+            </div>
+            
             <div id="manualPeaksList"></div>
             <div id="manualPeakStatus"></div>
         </div>
@@ -83,6 +96,10 @@
     <script>
         let imageShape = null;
         let currentImageIndex = null;
+        let isSelecting = false;
+        let startX, startY;
+        let imageElement = null;
+        let selectionBox = null;
         
         function formatFileSize(bytes) {
             if (bytes === 0) return '0 Bytes';
@@ -105,6 +122,131 @@
         function showInfo(elementId, message) {
             const element = document.getElementById(elementId);
             element.innerHTML = `<div class="info">${message}</div>`;
+        }
+        
+        function getImageCoordinates(e) {
+            if (!imageElement) return null;
+            
+            const rect = imageElement.getBoundingClientRect();
+            const imageNaturalWidth = imageElement.naturalWidth;
+            const imageNaturalHeight = imageElement.naturalHeight;
+            const imageDisplayWidth = rect.width;
+            const imageDisplayHeight = rect.height;
+            
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            
+            // Convert to image coordinates
+            const imageX = Math.round((mouseX / imageDisplayWidth) * imageNaturalWidth);
+            const imageY = Math.round((mouseY / imageDisplayHeight) * imageNaturalHeight);
+            
+            return {
+                displayX: mouseX,
+                displayY: mouseY,
+                imageX: imageX,
+                imageY: imageY,
+                scaleX: imageDisplayWidth / imageNaturalWidth,
+                scaleY: imageDisplayHeight / imageNaturalHeight
+            };
+        }
+        
+        function setupImageInteraction() {
+            imageElement = document.getElementById('smoothedImage');
+            const overlay = document.getElementById('selectionOverlay');
+            
+            if (!imageElement) return;
+            
+            // Prevent default drag behavior
+            imageElement.addEventListener('dragstart', function(e) {
+                e.preventDefault();
+            });
+            
+            imageElement.addEventListener('mousedown', function(e) {
+                e.preventDefault();
+                if (!imageShape) return;
+                
+                isSelecting = true;
+                const coords = getImageCoordinates(e);
+                if (!coords) return;
+                
+                startX = coords.imageX;
+                startY = coords.imageY;
+                
+                // Store selection box coordinates
+                selectionBox = {
+                    startX: startX,
+                    startY: startY,
+                    endX: startX,
+                    endY: startY
+                };
+                
+                overlay.style.left = `${coords.displayX}px`;
+                overlay.style.top = `${coords.displayY}px`;
+                overlay.style.width = '0px';
+                overlay.style.height = '0px';
+                overlay.style.display = 'block';
+                
+                document.addEventListener('mousemove', handleMouseMove);
+                document.addEventListener('mouseup', handleMouseUp);
+            });
+            
+            function handleMouseMove(e) {
+                if (!isSelecting || !imageShape) return;
+                
+                const coords = getImageCoordinates(e);
+                if (!coords) return;
+                
+                const left = Math.min(startX * coords.scaleX, coords.displayX);
+                const top = Math.min(startY * coords.scaleY, coords.displayY);
+                const width = Math.abs(coords.displayX - startX * coords.scaleX);
+                const height = Math.abs(coords.displayY - startY * coords.scaleY);
+                
+                overlay.style.left = `${left}px`;
+                overlay.style.top = `${top}px`;
+                overlay.style.width = `${width}px`;
+                overlay.style.height = `${height}px`;
+                
+                // Update selection box
+                if (selectionBox) {
+                    selectionBox.endX = coords.imageX;
+                    selectionBox.endY = coords.imageY;
+                }
+            }
+            
+            function handleMouseUp(e) {
+                if (!isSelecting || !imageShape) return;
+                
+                isSelecting = false;
+                const coords = getImageCoordinates(e);
+                if (!coords) return;
+                
+                const endX = coords.imageX;
+                const endY = coords.imageY;
+                
+                // Update selection box
+                if (selectionBox) {
+                    selectionBox.endX = endX;
+                    selectionBox.endY = endY;
+                    
+                    // Enable add button if selection is valid
+                    const minX = Math.min(selectionBox.startX, selectionBox.endX);
+                    const maxX = Math.max(selectionBox.startX, selectionBox.endX);
+                    const minY = Math.min(selectionBox.startY, selectionBox.endY);
+                    const maxY = Math.max(selectionBox.startY, selectionBox.endY);
+                    
+                    if (maxX - minX > 5 && maxY - minY > 5) {
+                        document.getElementById('addSelectedRegionBtn').disabled = false;
+                        showInfo('manualPeakStatus', 
+                            `Selection: x[${minX}:${maxX}], y[${minY}:${maxY}]. Click "Add Interface" to detect interface in this region.`);
+                    } else {
+                        document.getElementById('addSelectedRegionBtn').disabled = true;
+                        showError('manualPeakStatus', 'Selection too small. Please select a larger region.');
+                    }
+                }
+                
+                document.removeEventListener('mousemove', handleMouseMove);
+                document.removeEventListener('mouseup', handleMouseUp);
+            }
         }
         
         function updateManualPeaksList(manualPeaks) {
@@ -236,10 +378,11 @@
                         <p><strong>Image Type:</strong> Normalized (0-1 range)</p>
                     `;
                     
-                    // Update Y range limits
-                    document.getElementById('yStart').max = imageShape[0];
-                    document.getElementById('yEnd').max = imageShape[0];
-                    document.getElementById('yEnd').value = Math.min(100, imageShape[0]);
+                    // Reset sections
+                    document.getElementById('analysisDisplay').style.display = 'none';
+                    document.getElementById('peakDetectionSection').style.display = 'none';
+                    document.getElementById('manualPeakSection').style.display = 'none';
+                    document.getElementById('resultsSection').style.display = 'none';
                     
                     document.getElementById('preprocessingSection').style.display = 'block';
                 } else {
@@ -274,10 +417,24 @@
                 if (data.success) {
                     showSuccess('preprocessStatus', 'Preprocessing complete!');
                     
+                    // Update plots
                     document.getElementById('analysisPlot').src = 'data:image/png;base64,' + data.plot;
+                    document.getElementById('smoothedImage').src = 'data:image/png;base64,' + data.smoothed_image;
+                    
+                    // Show sections
                     document.getElementById('analysisDisplay').style.display = 'block';
                     document.getElementById('peakDetectionSection').style.display = 'block';
                     document.getElementById('manualPeakSection').style.display = 'block';
+                    
+                    // Setup image interaction after image loads
+                    const smoothedImg = document.getElementById('smoothedImage');
+                    smoothedImg.style.display = 'block';
+                    smoothedImg.onload = function() {
+                        setupImageInteraction();
+                    };
+                    
+                    // Reset manual peaks list
+                    updateManualPeaksList([]);
                 } else {
                     showError('preprocessStatus', data.error);
                 }
@@ -325,43 +482,71 @@
             });
         });
         
-        // Manual Peak Addition
-        document.getElementById('addManualPeakBtn').addEventListener('click', function() {
-            const yStart = parseInt(document.getElementById('yStart').value);
-            const yEnd = parseInt(document.getElementById('yEnd').value);
-            
-            if (yStart >= yEnd) {
-                showError('manualPeakStatus', 'Y Start must be less than Y End');
+        // Add Selected Region
+        document.getElementById('addSelectedRegionBtn').addEventListener('click', function() {
+            if (!selectionBox) {
+                showError('manualPeakStatus', 'No region selected');
                 return;
             }
             
-            showInfo('manualPeakStatus', 'Adding manual interface...');
-            document.getElementById('addManualPeakBtn').disabled = true;
+            const minX = Math.min(selectionBox.startX, selectionBox.endX);
+            const maxX = Math.max(selectionBox.startX, selectionBox.endX);
+            const minY = Math.min(selectionBox.startY, selectionBox.endY);
+            const maxY = Math.max(selectionBox.startY, selectionBox.endY);
             
-            fetch('/add_manual_peak', {
+            showInfo('manualPeakStatus', 'Adding interface from selected region...');
+            document.getElementById('addSelectedRegionBtn').disabled = true;
+            
+            fetch('/add_manual_peak_region', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    y_start: yStart,
-                    y_end: yEnd
+                    x_start: minX,
+                    x_end: maxX,
+                    y_start: minY,
+                    y_end: maxY
                 })
             })
             .then(response => response.json())
             .then(data => {
-                document.getElementById('addManualPeakBtn').disabled = false;
+                document.getElementById('addSelectedRegionBtn').disabled = false;
                 
                 if (data.success) {
-                    showSuccess('manualPeakStatus', `Interface added at Y=${data.peak_added}`);
+                    showSuccess('manualPeakStatus', data.message);
                     document.getElementById('analysisPlot').src = 'data:image/png;base64,' + data.plot;
                     updateManualPeaksList(data.manual_peaks);
+                    
+                    // Hide selection overlay
+                    document.getElementById('selectionOverlay').style.display = 'none';
+                    selectionBox = null;
                 } else {
                     showError('manualPeakStatus', data.error);
                 }
             })
             .catch(error => {
-                document.getElementById('addManualPeakBtn').disabled = false;
+                document.getElementById('addSelectedRegionBtn').disabled = false;
+                showError('manualPeakStatus', 'Network error: ' + error.message);
+            });
+        });
+        
+        // Clear Manual Peaks
+        document.getElementById('clearManualPeaksBtn').addEventListener('click', function() {
+            fetch('/clear_manual_peaks', {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showSuccess('manualPeakStatus', data.message);
+                    document.getElementById('analysisPlot').src = 'data:image/png;base64,' + data.plot;
+                    updateManualPeaksList([]);
+                } else {
+                    showError('manualPeakStatus', data.error);
+                }
+            })
+            .catch(error => {
                 showError('manualPeakStatus', 'Network error: ' + error.message);
             });
         });
@@ -383,6 +568,15 @@
                         <div class="stats-grid">
                             <div class="stat-item">
                                 <strong>Total Layers:</strong> ${data.stats.total_layers}
+                            </div>
+                            <div class="stat-item">
+                                <strong>Total Interfaces:</strong> ${data.stats.total_interfaces}
+                            </div>
+                            <div class="stat-item">
+                                <strong>Auto Interfaces:</strong> ${data.stats.auto_interfaces}
+                            </div>
+                            <div class="stat-item">
+                                <strong>Manual Interfaces:</strong> ${data.stats.manual_interfaces}
                             </div>
                             <div class="stat-item">
                                 <strong>Mean Thickness:</strong> ${data.stats.mean_thickness.toFixed(2)} nm

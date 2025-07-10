@@ -92,6 +92,69 @@ h1, h2, h3 {
     color: #495057;
 }
 
+.interactive-info {
+    background-color: #e3f2fd;
+    padding: 15px;
+    border-radius: 5px;
+    margin-bottom: 15px;
+    border-left: 4px solid #2196f3;
+}
+
+.interactive-info p {
+    margin: 5px 0;
+    color: #1565c0;
+}
+
+.legend-auto {
+    color: #00bcd4;
+    font-weight: bold;
+}
+
+.legend-manual {
+    color: #f44336;
+    font-weight: bold;
+}
+
+.image-container {
+    margin: 20px 0;
+    text-align: center;
+    overflow: auto;
+    max-height: 70vh;
+    border: 2px solid #ddd;
+    border-radius: 5px;
+    background-color: #f9f9f9;
+}
+
+.image-wrapper {
+    position: relative;
+    display: inline-block;
+}
+
+.image-wrapper img {
+    display: block;
+    cursor: crosshair;
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+}
+
+.selection-overlay {
+    position: absolute;
+    border: 2px dashed #ff5722;
+    background-color: rgba(255, 87, 34, 0.1);
+    display: none;
+    pointer-events: none;
+    z-index: 10;
+}
+
+.manual-controls {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+    margin: 15px 0;
+}
+
 .analysis-plot {
     text-align: center;
     margin: 20px 0;
@@ -128,6 +191,22 @@ button:hover {
 button:disabled {
     background-color: #6c757d;
     cursor: not-allowed;
+}
+
+#addSelectedRegionBtn {
+    background-color: #28a745;
+}
+
+#addSelectedRegionBtn:hover {
+    background-color: #218838;
+}
+
+#clearManualPeaksBtn {
+    background-color: #dc3545;
+}
+
+#clearManualPeaksBtn:hover {
+    background-color: #c82333;
 }
 
 .error {

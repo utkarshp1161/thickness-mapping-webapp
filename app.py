@@ -81,9 +81,15 @@ def generate_analysis_plot():
     
     # Plot interfaces
     for i, y in enumerate(all_peaks):
-        color = 'cyan' if y in detected_peaks else 'red'
-        linestyle = ':' if y in detected_peaks else '--'
-        ax_img.axhline(y, color=color, linestyle=linestyle, linewidth=1)
+        if detected_peaks is not None and y in detected_peaks:
+            color = 'cyan'
+            linestyle = ':'
+            linewidth = 1
+        else:
+            color = 'red'
+            linestyle = '--'
+            linewidth = 2
+        ax_img.axhline(y, color=color, linestyle=linestyle, linewidth=linewidth)
     
     # Right: Vertical Profiles
     if vertical_profiles is not None:
@@ -93,13 +99,20 @@ def generate_analysis_plot():
         ax_prof.plot(vertical_profiles['gradient'], y_pixels, label="Gradient", linestyle='--', alpha=0.5, color='green')
         
         # Plot interface lines
-        for i, y in enumerate(all_peaks):
-            color = 'cyan' if y in detected_peaks else 'red'
-            linestyle = '--' if y in detected_peaks else '-'
-            label = f"Auto Interface {i+1}" if y in detected_peaks and i == 0 else None
-            if y in manual_peaks and i == 0:
-                label = "Manual Interface"
-            ax_prof.axhline(y, linestyle=linestyle, color=color, alpha=0.6, label=label)
+        auto_labeled = False
+        manual_labeled = False
+        for y in all_peaks:
+            if detected_peaks is not None and y in detected_peaks:
+                color = 'cyan'
+                linestyle = '--'
+                label = "Auto Interfaces" if not auto_labeled else None
+                auto_labeled = True
+            else:
+                color = 'red'
+                linestyle = '-'
+                label = "Manual Interfaces" if not manual_labeled else None
+                manual_labeled = True
+            ax_prof.axhline(y, linestyle=linestyle, color=color, alpha=0.8, label=label)
     
     ax_prof.set_title("Vertical Profiles & Detected Interfaces")
     ax_prof.set_xlabel("Intensity")
@@ -193,7 +206,7 @@ def upload_file():
 
 @app.route('/select_image', methods=['POST'])
 def select_image():
-    global current_image, original_image, pixel_size
+    global current_image, original_image, pixel_size, smoothed_image, vertical_profiles, detected_peaks, manual_peaks
     
     if loaded_images is None:
         return jsonify({'error': 'No images loaded'})
@@ -216,6 +229,12 @@ def select_image():
         raw_image = np.array(selected_img.data).astype(np.float32)
         original_image = normalize(raw_image)
         current_image = original_image.copy()
+        
+        # Reset analysis when new image is selected
+        smoothed_image = None
+        vertical_profiles = None
+        detected_peaks = None
+        manual_peaks = []
         
         print(f"Selected image {image_index}. Shape: {current_image.shape}")
         
@@ -263,6 +282,7 @@ def preprocess_image():
         return jsonify({
             'success': True,
             'plot': plot_base64,
+            'smoothed_image': image_to_base64(smoothed_image),
             'stats': {
                 'mean_intensity': float(np.mean(smoothed_image)),
                 'std_intensity': float(np.std(smoothed_image)),
@@ -314,28 +334,30 @@ def detect_peaks():
         print(f"Error detecting peaks: {e}")
         return jsonify({'error': f'Error detecting peaks: {str(e)}'})
 
-@app.route('/add_manual_peak', methods=['POST'])
-def add_manual_peak():
+@app.route('/add_manual_peak_region', methods=['POST'])
+def add_manual_peak_region():
     global manual_peaks, vertical_profiles
     
     if vertical_profiles is None:
         return jsonify({'error': 'No preprocessed image available'})
     
     data = request.json
+    x_start = int(data.get('x_start', 0))
+    x_end = int(data.get('x_end', 100))
     y_start = int(data.get('y_start', 0))
     y_end = int(data.get('y_end', 100))
     
     try:
-        print(f"Adding manual peak in range [{y_start}, {y_end}]")
+        print(f"Adding manual peak in region x[{x_start}:{x_end}], y[{y_start}:{y_end}]")
         
-        # Find interface in specified range
+        # Validate range
         if y_start >= y_end or y_start < 0 or y_end >= len(vertical_profiles['gradient']):
-            return jsonify({'error': 'Invalid range specified'})
+            return jsonify({'error': 'Invalid Y range specified'})
         
-        # Find the strongest gradient in the range
+        # Find the strongest gradient in the Y range
         grad_region = vertical_profiles['gradient'][y_start:y_end]
         if len(grad_region) == 0:
-            return jsonify({'error': 'Empty range specified'})
+            return jsonify({'error': 'Empty Y range specified'})
         
         offset = np.argmax(np.abs(grad_region))
         manual_peak = y_start + offset
@@ -344,16 +366,22 @@ def add_manual_peak():
         if manual_peak not in manual_peaks:
             manual_peaks.append(manual_peak)
             manual_peaks.sort()
-        
-        # Generate updated analysis plot
-        plot_base64 = generate_analysis_plot()
-        
-        return jsonify({
-            'success': True,
-            'plot': plot_base64,
-            'peak_added': manual_peak,
-            'manual_peaks': manual_peaks
-        })
+            
+            # Generate updated analysis plot
+            plot_base64 = generate_analysis_plot()
+            
+            return jsonify({
+                'success': True,
+                'plot': plot_base64,
+                'peak_added': manual_peak,
+                'manual_peaks': manual_peaks,
+                'message': f'Interface added at Y={manual_peak} (selected region: x[{x_start}:{x_end}], y[{y_start}:{y_end}])'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': f'Interface at Y={manual_peak} already exists'
+            })
         
     except Exception as e:
         print(f"Error adding manual peak: {e}")
@@ -423,6 +451,9 @@ def calculate_thickness():
             'min_thickness': float(np.min(thickness_values)),
             'max_thickness': float(np.max(thickness_values)),
             'total_layers': len(thicknesses),
+            'total_interfaces': len(all_peaks),
+            'auto_interfaces': len(detected_peaks) if detected_peaks is not None else 0,
+            'manual_interfaces': len(manual_peaks),
             'pixel_size': pixel_size
         }
         
@@ -449,5 +480,20 @@ def reset_analysis():
     
     return jsonify({'success': True, 'message': 'Analysis reset successfully'})
 
+@app.route('/clear_manual_peaks', methods=['POST'])
+def clear_manual_peaks():
+    global manual_peaks
+    
+    manual_peaks = []
+    
+    # Generate updated analysis plot
+    plot_base64 = generate_analysis_plot()
+    
+    return jsonify({
+        'success': True,
+        'plot': plot_base64,
+        'message': 'All manual interfaces cleared'
+    })
+
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5001)  # Different port from SAM app
+    app.run(debug=True, host='0.0.0.0', port=5001)
