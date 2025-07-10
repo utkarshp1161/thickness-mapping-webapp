@@ -373,8 +373,8 @@ def add_manual_peak_region():
             return jsonify({
                 'success': True,
                 'plot': plot_base64,
-                'peak_added': manual_peak,
-                'manual_peaks': manual_peaks,
+                'peak_added': int(manual_peak),
+                'manual_peaks': [int(p) for p in manual_peaks],
                 'message': f'Interface added at Y={manual_peak} (selected region: x[{x_start}:{x_end}], y[{y_start}:{y_end}])'
             })
         else:
