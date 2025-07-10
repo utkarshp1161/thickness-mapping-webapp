@@ -162,8 +162,9 @@
             
             // Convert to image coordinates
             // Use floor instead of round to ensure we don't exceed bounds
-            const imageX = Math.floor((mouseX / imageDisplayWidth) * imageNaturalWidth);
-            const imageY = Math.floor((mouseY / imageDisplayHeight) * imageNaturalHeight);
+            // Convert to image coordinates and clamp to valid range
+            const imageX = Math.max(0, Math.min(Math.round((mouseX / imageDisplayWidth) * imageNaturalWidth), imageNaturalWidth - 1));
+            const imageY = Math.max(0, Math.min(Math.round((mouseY / imageDisplayHeight) * imageNaturalHeight), imageNaturalHeight - 1));
             
             return {
                 displayX: mouseX,
@@ -312,11 +313,20 @@
                     <p><strong>Size:</strong> ${maxX - minX} × ${maxY - minY} pixels</p>
                 `;
                 
-                // Enable add button if selection is valid
-                if (maxX - minX > 5 && maxY - minY > 5) {
+                // Validate selection bounds
+                if (maxX - minX > 5 && maxY - minY > 5 && 
+                    minX >= 0 && maxX <= imageShape[1] && 
+                    minY >= 0 && maxY <= imageShape[0]) {
                     document.getElementById('addSelectedRegionBtn').disabled = false;
+                    showInfo('manualPeakStatus', 
+                        `Selection: x[${minX}:${maxX}], y[${minY}:${maxY}]. Click "Add Interface" to detect interface in this region.`);
                 } else {
                     document.getElementById('addSelectedRegionBtn').disabled = true;
+                    if (maxX - minX <= 5 || maxY - minY <= 5) {
+                        showError('manualPeakStatus', 'Selection too small. Please select a larger region.');
+                    } else {
+                        showError('manualPeakStatus', 'Selection is outside image bounds. Please select within the image.');
+                    }
                 }
                 
                 document.removeEventListener('mousemove', handleMouseMove);
@@ -636,8 +646,9 @@
             })
             .catch(error => {
                 document.getElementById('addSelectedRegionBtn').disabled = false;
-                showError('manualPeakStatus', 'Network error: ' + error.message);
-            });
+                console.error('Full error:', error);
+                showError('manualPeakStatus', 'Network error: ' + error.message + '. Check console for details.');
+            });         
         });
         
         // Clear Manual Peaks

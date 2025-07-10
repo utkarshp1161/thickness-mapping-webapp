@@ -303,8 +303,8 @@ def detect_peaks():
     
     data = request.json
     distance = int(data.get('distance', 30))
-    height = float(data.get('height', 0.001))
-    top_n = int(data.get('top_n', 100))
+    height = float(data.get('height', 0.0001))
+    top_n = int(data.get('top_n', 10))
     
     try:
         print(f"Detecting peaks with distance={distance}, height={height}, top_n={top_n}")
@@ -350,9 +350,20 @@ def add_manual_peak_region():
     try:
         print(f"Adding manual peak in region x[{x_start}:{x_end}], y[{y_start}:{y_end}]")
         
-        # Validate range
-        if y_start >= y_end or y_start < 0 or y_end >= len(vertical_profiles['gradient']):
-            return jsonify({'error': 'Invalid Y range specified'})
+        # Validate range with proper bounds checking
+        max_y = len(vertical_profiles['gradient']) - 1
+        if y_start >= y_end:
+            return jsonify({'error': f'Y Start ({y_start}) must be less than Y End ({y_end})'})
+        if y_start < 0:
+            return jsonify({'error': f'Y Start ({y_start}) cannot be negative'})
+        if y_end > max_y:
+            return jsonify({'error': f'Y End ({y_end}) exceeds image height ({max_y})'})
+        if y_start > max_y:
+            return jsonify({'error': f'Y Start ({y_start}) exceeds image height ({max_y})'})
+
+        # Ensure we have a valid range
+        y_start = max(0, min(y_start, max_y))
+        y_end = max(y_start + 1, min(y_end, max_y))
         
         # Find the strongest gradient in the Y range
         grad_region = vertical_profiles['gradient'][y_start:y_end]
