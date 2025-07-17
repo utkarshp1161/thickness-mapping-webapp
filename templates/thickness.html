@@ -748,7 +748,7 @@
                     `;
                     
                     // Update thickness table
-                    let tableHtml = '<table><thead><tr><th>Layer</th><th>Start Interface</th><th>End Interface</th><th>Thickness (pixels)</th><th>Thickness (nm)</th></tr></thead><tbody>';
+                    let tableHtml = '<table><thead><tr><th>Layer</th><th>Start Interface</th><th>End Interface</th><th>Thickness (pixels)</th><th>Thickness (nm)</th><th>Start Roughness</th><th>End Roughness</th></tr></thead><tbody>';
                     data.thicknesses.forEach(thickness => {
                         tableHtml += `
                             <tr>
@@ -762,6 +762,7 @@
                             </tr>
                         `;
                     });
+
                     tableHtml += '</tbody></table>';
                     document.getElementById('thicknessTable').innerHTML = tableHtml;
                     
