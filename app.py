@@ -631,5 +631,94 @@ def cleanup():
     except Exception as e:
         print(f"Error during cleanup: {e}")
         return jsonify({'error': f'Error during cleanup: {str(e)}'})
+    
+@app.route('/download_analysis_image', methods=['POST'])
+def download_analysis_image():
+    global original_image, smoothed_image, vertical_profiles, detected_peaks, manual_peaks
+    
+    if original_image is None or smoothed_image is None:
+        return jsonify({'error': 'No analysis image available'})
+    
+    try:
+        # Generate the analysis plot (same as generate_analysis_plot but save to file)
+        all_peaks = list(detected_peaks) if detected_peaks is not None else []
+        all_peaks.extend(manual_peaks)
+        all_peaks = sorted(set(all_peaks))
+        
+        fig, (ax_img_raw, ax_img, ax_prof) = plt.subplots(1, 3, figsize=(20, 7), sharey=True)
+        
+        # Left: Original Image
+        ax_img_raw.imshow(original_image, cmap='gray', aspect='auto', origin="lower")
+        ax_img_raw.set_title("Original Image")
+        ax_img_raw.set_xlabel("X (pixels)")
+        ax_img_raw.set_ylabel("Y (pixels)")
+        
+        # Middle: Smoothed Image with detected interfaces
+        ax_img.imshow(smoothed_image, cmap='gray', aspect='auto', origin="lower")
+        ax_img.set_title("Smoothed Image with Interfaces")
+        ax_img.set_xlabel("X (pixels)")
+        ax_img.set_ylabel("Y (pixels)")
+        
+        # Plot interfaces
+        for i, y in enumerate(all_peaks):
+            if detected_peaks is not None and y in detected_peaks:
+                color = 'cyan'
+                linestyle = ':'
+                linewidth = 1
+            else:
+                color = 'red'
+                linestyle = '--'
+                linewidth = 2
+            ax_img.axhline(y, color=color, linestyle=linestyle, linewidth=linewidth)
+        
+        # Right: Vertical Profiles
+        if vertical_profiles is not None:
+            y_pixels = np.arange(len(vertical_profiles['mean']))
+            ax_prof.plot(vertical_profiles['mean'], y_pixels, label="Mean", color='black')
+            ax_prof.plot(vertical_profiles['std'], y_pixels, label="Std Dev", alpha=0.5, color='blue')
+            ax_prof.plot(vertical_profiles['gradient'], y_pixels, label="Gradient", linestyle='--', alpha=0.5, color='green')
+            
+            # Plot interface lines
+            auto_labeled = False
+            manual_labeled = False
+            for y in all_peaks:
+                if detected_peaks is not None and y in detected_peaks:
+                    color = 'cyan'
+                    linestyle = '--'
+                    label = "Auto Interfaces" if not auto_labeled else None
+                    auto_labeled = True
+                else:
+                    color = 'red'
+                    linestyle = '-'
+                    label = "Manual Interfaces" if not manual_labeled else None
+                    manual_labeled = True
+                ax_prof.axhline(y, linestyle=linestyle, color=color, alpha=0.8, label=label)
+        
+        ax_prof.set_title("Vertical Profiles & Detected Interfaces")
+        ax_prof.set_xlabel("Intensity")
+        ax_prof.set_ylabel("Y (pixels)")
+        ax_prof.invert_yaxis()
+        ax_prof.legend()
+        ax_prof.grid(True, linestyle=':', alpha=0.4)
+        
+        # Custom Y-axis ticks
+        yticks = np.arange(0, original_image.shape[0], 50)
+        ax_img_raw.set_yticks(yticks)
+        ax_img.set_yticks(yticks)
+        ax_prof.set_yticks(yticks)
+        
+        plt.tight_layout()
+        
+        # Save to temporary file
+        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
+        fig.savefig(temp_file.name, format='png', bbox_inches='tight', dpi=300)
+        plt.close(fig)
+        
+        return send_file(temp_file.name, as_attachment=True, download_name='analysis_with_interfaces.png')
+        
+    except Exception as e:
+        print(f"Error generating analysis image: {e}")
+        return jsonify({'error': f'Error generating analysis image: {str(e)}'})
+    
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5001)

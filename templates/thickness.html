@@ -119,6 +119,18 @@
                 <button id="cleanupBtn">Cleanup & Clear Memory</button>
             </div>
         </div>
+
+        <!-- Results Section -->
+        <div class="results-section" id="resultsSection" style="display: none;">
+            <h2>Thickness Results</h2>
+            <div id="thicknessStats"></div>
+            <div id="thicknessTable"></div>
+            <div class="analysis-controls">
+                <button id="downloadCsvBtn">Download CSV</button>
+                <button id="downloadAnalysisBtn">Download Analysis Image</button>
+                <button id="cleanupBtn">Cleanup & Clear Memory</button>
+            </div>
+        </div>
     
     <script>
         let imageShape = null;
@@ -831,6 +843,37 @@
                     showError('interfaceManagementStatus', 'Network error: ' + error.message);
                 });
             }
+        });
+
+        // Download Analysis Image
+        document.getElementById('downloadAnalysisBtn').addEventListener('click', function() {
+            showInfo('interfaceManagementStatus', 'Generating analysis image...');
+            
+            fetch('/download_analysis_image', {
+                method: 'POST'
+            })
+            .then(response => {
+                if (response.ok) {
+                    return response.blob();
+                }
+                return response.json().then(data => {
+                    throw new Error(data.error || 'Unknown error');
+                });
+            })
+            .then(blob => {
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'analysis_with_interfaces.png';
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+                showSuccess('interfaceManagementStatus', 'Analysis image downloaded successfully!');
+            })
+            .catch(error => {
+                showError('interfaceManagementStatus', 'Error downloading analysis image: ' + error.message);
+            });
         });
     </script>
 </body>

@@ -405,3 +405,11 @@ table tr:nth-child(even) {
 #cleanupBtn:hover {
     background-color: #5a6268;
 }
+
+#downloadAnalysisBtn {
+    background-color: #17a2b8;
+}
+
+#downloadAnalysisBtn:hover {
+    background-color: #138496;
+}
