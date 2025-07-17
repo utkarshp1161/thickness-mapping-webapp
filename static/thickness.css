@@ -389,3 +389,19 @@ table tr:nth-child(even) {
     flex-wrap: wrap;
     gap: 15px;
 }
+
+#downloadCsvBtn {
+    background-color: #28a745;
+}
+
+#downloadCsvBtn:hover {
+    background-color: #218838;
+}
+
+#cleanupBtn {
+    background-color: #6c757d;
+}
+
+#cleanupBtn:hover {
+    background-color: #5a6268;
+}

@@ -549,5 +549,85 @@ def get_all_interfaces():
         'total_count': len(all_interfaces)
     })
 
+@app.route('/download_csv', methods=['POST'])
+def download_csv():
+    global detected_peaks, manual_peaks, pixel_size, current_image
+    
+    if detected_peaks is None and not manual_peaks:
+        return jsonify({'error': 'No peaks detected or manually added'})
+    
+    try:
+        # Combine all peaks
+        all_peaks = list(detected_peaks) if detected_peaks is not None else []
+        all_peaks.extend(manual_peaks)
+        all_peaks = sorted(set(all_peaks))
+        
+        if len(all_peaks) < 2:
+            return jsonify({'error': 'At least 2 interfaces needed for thickness calculation'})
+        
+        # Calculate thicknesses
+        thicknesses = []
+        for i in range(len(all_peaks) - 1):
+            thickness_pixels = all_peaks[i+1] - all_peaks[i]
+            thickness_nm = thickness_pixels * pixel_size
+            thicknesses.append({
+                'layer': i + 1,
+                'start_interface': all_peaks[i],
+                'end_interface': all_peaks[i+1],
+                'thickness_pixels': thickness_pixels,
+                'thickness_nm': thickness_nm
+            })
+        
+        # Create CSV file
+        temp_file = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.csv', newline='')
+        writer = csv.writer(temp_file)
+        
+        # Write headers
+        writer.writerow(['Layer', 'Start_Interface', 'End_Interface', 'Thickness_Pixels', 'Thickness_nm'])
+        
+        # Write data
+        for thickness in thicknesses:
+            writer.writerow([
+                thickness['layer'],
+                thickness['start_interface'],
+                thickness['end_interface'],
+                thickness['thickness_pixels'],
+                thickness['thickness_nm']
+            ])
+        
+        temp_file.close()
+        
+        return send_file(temp_file.name, as_attachment=True, download_name='thickness_results.csv')
+        
+    except Exception as e:
+        print(f"Error generating CSV: {e}")
+        return jsonify({'error': f'Error generating CSV: {str(e)}'})
+
+@app.route('/cleanup', methods=['POST'])
+def cleanup():
+    global loaded_images, current_image, original_image, smoothed_image, vertical_profiles, detected_peaks, manual_peaks
+    
+    try:
+        # Clean up uploaded files
+        upload_folder = app.config['UPLOAD_FOLDER']
+        for filename in os.listdir(upload_folder):
+            file_path = os.path.join(upload_folder, filename)
+            if os.path.isfile(file_path):
+                os.remove(file_path)
+        
+        # Reset all global variables
+        loaded_images = None
+        current_image = None
+        original_image = None
+        smoothed_image = None
+        vertical_profiles = None
+        detected_peaks = None
+        manual_peaks = []
+        
+        return jsonify({'success': True, 'message': 'Cleanup completed successfully'})
+        
+    except Exception as e:
+        print(f"Error during cleanup: {e}")
+        return jsonify({'error': f'Error during cleanup: {str(e)}'})
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5001)

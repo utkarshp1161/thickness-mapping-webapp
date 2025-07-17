@@ -114,8 +114,11 @@
             <h2>Thickness Results</h2>
             <div id="thicknessStats"></div>
             <div id="thicknessTable"></div>
+            <div class="analysis-controls">
+                <button id="downloadCsvBtn">Download CSV</button>
+                <button id="cleanupBtn">Cleanup & Clear Memory</button>
+            </div>
         </div>
-    </div>
     
     <script>
         let imageShape = null;
@@ -769,6 +772,63 @@
                 })
                 .catch(error => {
                     showError('preprocessStatus', 'Network error: ' + error.message);
+                });
+
+            }
+        });
+        // Download CSV
+        document.getElementById('downloadCsvBtn').addEventListener('click', function() {
+            showInfo('interfaceManagementStatus', 'Generating CSV...');
+            
+            fetch('/download_csv', {
+                method: 'POST'
+            })
+            .then(response => {
+                if (response.ok) {
+                    return response.blob();
+                }
+                return response.json().then(data => {
+                    throw new Error(data.error || 'Unknown error');
+                });
+            })
+            .then(blob => {
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'thickness_results.csv';
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+                showSuccess('interfaceManagementStatus', 'CSV downloaded successfully!');
+            })
+            .catch(error => {
+                showError('interfaceManagementStatus', 'Error downloading CSV: ' + error.message);
+            });
+        });
+
+        // Cleanup
+        document.getElementById('cleanupBtn').addEventListener('click', function() {
+            if (confirm('This will delete all uploaded files and reset the application. Continue?')) {
+                showInfo('interfaceManagementStatus', 'Cleaning up...');
+                
+                fetch('/cleanup', {
+                    method: 'POST'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showSuccess('interfaceManagementStatus', 'Cleanup completed! Page will reload.');
+                        // Reset UI
+                        setTimeout(() => {
+                            location.reload();
+                        }, 2000);
+                    } else {
+                        showError('interfaceManagementStatus', data.error);
+                    }
+                })
+                .catch(error => {
+                    showError('interfaceManagementStatus', 'Network error: ' + error.message);
                 });
             }
         });
