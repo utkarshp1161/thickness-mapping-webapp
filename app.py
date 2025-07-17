@@ -590,10 +590,10 @@ def download_csv():
         if image_source is None:
             return jsonify({'error': 'No image available for roughness calculation'})
 
-        # Compute roughness for all interfaces
         interface_roughness = {
-            int(y)*pixel_size: float(np.std(image_source[y, :])) for y in all_peaks
+            int(y): float(np.std(image_source[y, :])) * pixel_size for y in all_peaks
         }
+
 
         # Prepare thickness and roughness data
         thicknesses = []
