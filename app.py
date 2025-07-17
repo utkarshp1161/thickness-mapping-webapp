@@ -303,19 +303,22 @@ def detect_peaks():
     
     data = request.json
     distance = int(data.get('distance', 30))
-    height = float(data.get('height', 0.0001))
+    percentile = float(data.get('percentile', 95))  # Changed from height to percentile
     top_n = int(data.get('top_n', 10))
     
     try:
-        print(f"Detecting peaks with distance={distance}, height={height}, top_n={top_n}")
+        print(f"Detecting peaks with distance={distance}, percentile={percentile}, top_n={top_n}")
         
-        # Find peaks in gradient
+        # Find peaks in gradient using percentile-based height threshold
         grad = vertical_profiles['gradient']
-        peaks, _ = find_peaks(np.abs(grad), distance=distance, height=height)
+        abs_grad = np.abs(grad)
+        height_threshold = np.percentile(abs_grad, percentile)  # Use percentile for height
+        
+        peaks, _ = find_peaks(abs_grad, distance=distance, height=height_threshold)
         
         # Select strongest N peaks
         if len(peaks) > top_n:
-            idx = np.argsort(np.abs(grad[peaks]))[::-1][:top_n]
+            idx = np.argsort(abs_grad[peaks])[::-1][:top_n]
             peaks = peaks[idx]
         
         detected_peaks = sorted(peaks.tolist())
@@ -333,7 +336,8 @@ def detect_peaks():
     except Exception as e:
         print(f"Error detecting peaks: {e}")
         return jsonify({'error': f'Error detecting peaks: {str(e)}'})
-
+    
+    
 @app.route('/add_manual_peak_region', methods=['POST'])
 def add_manual_peak_region():
     global manual_peaks, vertical_profiles
