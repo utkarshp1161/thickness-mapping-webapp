@@ -751,16 +751,13 @@
                     let tableHtml = '<table><thead><tr><th>Layer</th><th>Start Interface</th><th>End Interface</th><th>Thickness (pixels)</th><th>Thickness (nm)</th><th>Start Roughness</th><th>End Roughness</th></tr></thead><tbody>';
                     data.thicknesses.forEach(thickness => {
                         tableHtml += `
-                                <tr>
-                                    <td>${thickness.layer}</td>
-                                    <td>${thickness.start_interface}</td>
-                                    <td>${thickness.end_interface}</td>
-                                    <td>${thickness.thickness_pixels}</td>
-                                    <td>${thickness.thickness_nm.toFixed(2)}</td>
-                                    <!-- <td>${thickness.start_roughness_nm !== null ? thickness.start_roughness_nm.toFixed(4) : 'N/A'}</td> -->
-                                    <!-- <td>${thickness.end_roughness_nm !== null ? thickness.end_roughness_nm.toFixed(4) : 'N/A'}</td> -->
-                                </tr>
-
+                            <tr>
+                                <td>${thickness.layer}</td>
+                                <td>${thickness.start_interface}</td>
+                                <td>${thickness.end_interface}</td>
+                                <td>${thickness.thickness_pixels}</td>
+                                <td>${thickness.thickness_nm.toFixed(2)}</td>
+                            </tr>
                         `;
                     }); 
 

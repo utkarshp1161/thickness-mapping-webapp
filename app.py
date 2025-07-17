@@ -610,7 +610,7 @@ def download_csv():
                 'start_interface': y_start,
                 'end_interface': y_end,
                 'thickness_pixels': thickness_pixels,
-                'thickness_nm': thickness_nm,
+                'thickness_nm': thickness_nm
                 # 'start_roughness_nm': rough_start,
                 # 'end_roughness_nm': rough_end
             })
