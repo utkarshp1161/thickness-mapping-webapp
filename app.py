@@ -482,8 +482,8 @@ def calculate_thickness():
                 'end_interface': int(y_end),
                 'thickness_pixels': int(thickness_pixels),
                 'thickness_nm': float(thickness_nm),
-                'start_roughness(nm)': rough_start_nm,
-                'end_roughness(nm)': rough_end_nm
+                'start_roughness_nm': rough_start_nm,
+                'end_roughness_nm': rough_end_nm
             })
 
                     
