@@ -457,16 +457,32 @@ def calculate_thickness():
         
         # Calculate thicknesses between consecutive interfaces
         thicknesses = []
+        image_source = smoothed_image if smoothed_image is not None else current_image
+        interface_roughness = {}
+
+        if image_source is not None:
+            for y in all_peaks:
+                interface_roughness[int(y)] = float(np.std(image_source[y, :]))
+
         for i in range(len(all_peaks) - 1):
-            thickness_pixels = all_peaks[i+1] - all_peaks[i]
+            y_start = all_peaks[i]
+            y_end = all_peaks[i + 1]
+            thickness_pixels = y_end - y_start
             thickness_nm = thickness_pixels * pixel_size
+
+            rough_start = interface_roughness.get(int(y_start), None)
+            rough_end = interface_roughness.get(int(y_end), None)
+
             thicknesses.append({
                 'layer': int(i + 1),
-                'start_interface': int(all_peaks[i]),
-                'end_interface': int(all_peaks[i+1]),
+                'start_interface': int(y_start),
+                'end_interface': int(y_end),
                 'thickness_pixels': int(thickness_pixels),
-                'thickness_nm': float(thickness_nm)
+                'thickness_nm': float(thickness_nm),
+                'start_roughness': rough_start,
+                'end_roughness': rough_end
             })
+
                     
         # Calculate statistics
         thickness_values = [t['thickness_nm'] for t in thicknesses]

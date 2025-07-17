@@ -736,6 +736,14 @@
                             <div class="stat-item">
                                 <strong>Pixel Size:</strong> ${data.stats.pixel_size.toFixed(4)} nm
                             </div>
+                            <div class="stat-item">
+                                <strong>Pixel Size:</strong> ${data.stats.pixel_size.toFixed(4)} nm
+                            </div>
+                            <!-- Optionally if you ever add global mean roughness -->
+                            <!-- <div class="stat-item">
+                                <strong>Mean Roughness:</strong> ${data.stats.mean_roughness?.toFixed(4) ?? 'N/A'}
+                            </div> -->
+
                         </div>
                     `;
                     
@@ -749,6 +757,8 @@
                                 <td>${thickness.end_interface}</td>
                                 <td>${thickness.thickness_pixels}</td>
                                 <td>${thickness.thickness_nm.toFixed(2)}</td>
+                                <td>${thickness.start_roughness !== null ? thickness.start_roughness.toFixed(4) : 'N/A'}</td>
+                                <td>${thickness.end_roughness !== null ? thickness.end_roughness.toFixed(4) : 'N/A'}</td>
                             </tr>
                         `;
                     });
