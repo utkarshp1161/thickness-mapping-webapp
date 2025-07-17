@@ -457,33 +457,33 @@ def calculate_thickness():
         
         # Calculate thicknesses between consecutive interfaces
         thicknesses = []
-        image_source = smoothed_image if smoothed_image is not None else current_image
-        interface_roughness_pixels = {}
-        interface_roughness_nm = {}
+        # image_source = smoothed_image if smoothed_image is not None else current_image
+        # interface_roughness_pixels = {}
+        # interface_roughness_nm = {}
 
-        if image_source is not None:
-            for y in all_peaks:
-                interface_roughness_pixels[int(y)] = float(np.std(image_source[y, :]))
-                interface_roughness_nm[int(y)] = float(np.std(image_source[y, :]))*pixel_size
+        # if image_source is not None:
+        #     for y in all_peaks:
+        #         interface_roughness_pixels[int(y)] = float(np.std(image_source[y, :]))
+        #         interface_roughness_nm[int(y)] = float(np.std(image_source[y, :]))*pixel_size
 
         for i in range(len(all_peaks) - 1):
             y_start = all_peaks[i]
             y_end = all_peaks[i + 1]
             thickness_pixels = y_end - y_start
             thickness_nm = thickness_pixels * pixel_size
-            rough_start_pixel = interface_roughness_pixels.get(int(y_start), None)
-            rough_end_pixel = interface_roughness_pixels.get(int(y_end), None)
-            rough_start_nm = interface_roughness_nm.get(int(y_start), None)
-            rough_end_nm = interface_roughness_nm.get(int(y_end), None)
+            # rough_start_pixel = interface_roughness_pixels.get(int(y_start), None)
+            # rough_end_pixel = interface_roughness_pixels.get(int(y_end), None)
+            # rough_start_nm = interface_roughness_nm.get(int(y_start), None)
+            # rough_end_nm = interface_roughness_nm.get(int(y_end), None)
 
             thicknesses.append({
                 'layer': int(i + 1),
                 'start_interface': int(y_start),
                 'end_interface': int(y_end),
                 'thickness_pixels': int(thickness_pixels),
-                'thickness_nm': float(thickness_nm),
-                'start_roughness_nm': rough_start_nm,
-                'end_roughness_nm': rough_end_nm
+                'thickness_nm': float(thickness_nm)
+                # 'start_roughness_nm': rough_start_nm,
+                # 'end_roughness_nm': rough_end_nm
             })
 
                     
@@ -590,9 +590,9 @@ def download_csv():
         if image_source is None:
             return jsonify({'error': 'No image available for roughness calculation'})
 
-        interface_roughness = {
-            int(y): float(np.std(image_source[y, :])) * pixel_size for y in all_peaks
-        }
+        # interface_roughness = {
+        #     int(y): float(np.std(image_source[y, :])) * pixel_size for y in all_peaks
+        # }
 
 
         # Prepare thickness and roughness data
@@ -602,8 +602,8 @@ def download_csv():
             y_end = all_peaks[i + 1]
             thickness_pixels = y_end - y_start
             thickness_nm = thickness_pixels * pixel_size
-            rough_start = interface_roughness.get(int(y_start), None)
-            rough_end = interface_roughness.get(int(y_end), None)
+            # rough_start = interface_roughness.get(int(y_start), None)
+            # rough_end = interface_roughness.get(int(y_end), None)
 
             thicknesses.append({
                 'layer': i + 1,
@@ -611,8 +611,8 @@ def download_csv():
                 'end_interface': y_end,
                 'thickness_pixels': thickness_pixels,
                 'thickness_nm': thickness_nm,
-                'start_roughness_nm': rough_start,
-                'end_roughness_nm': rough_end
+                # 'start_roughness_nm': rough_start,
+                # 'end_roughness_nm': rough_end
             })
 
         # Create CSV file
@@ -625,9 +625,9 @@ def download_csv():
             'Start_Interface',
             'End_Interface',
             'Thickness_Pixels',
-            'Thickness_nm',
-            'Start_Interface_Roughness_nm',
-            'End_Interface_Roughness_nm'
+            'Thickness_nm'
+            # 'Start_Interface_Roughness_nm',
+            # 'End_Interface_Roughness_nm'
         ])
 
         # Write data
@@ -637,9 +637,9 @@ def download_csv():
                 t['start_interface'],
                 t['end_interface'],
                 t['thickness_pixels'],
-                f"{t['thickness_nm']:.4f}",
-                f"{t['start_roughness_nm']:.4f}" if t['start_roughness_nm'] is not None else 'N/A',
-                f"{t['end_roughness_nm']:.4f}" if t['end_roughness_nm'] is not None else 'N/A'
+                f"{t['thickness_nm']:.4f}"
+                # f"{t['start_roughness_nm']:.4f}" if t['start_roughness_nm'] is not None else 'N/A',
+                # f"{t['end_roughness_nm']:.4f}" if t['end_roughness_nm'] is not None else 'N/A'
             ])
 
         temp_file.close()

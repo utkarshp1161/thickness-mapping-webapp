@@ -757,8 +757,8 @@
                                 <td>${thickness.end_interface}</td>
                                 <td>${thickness.thickness_pixels}</td>
                                 <td>${thickness.thickness_nm.toFixed(2)}</td>
-                                <td>${thickness.start_roughness_nm !== null ? thickness.start_roughness_nm.toFixed(4) : 'N/A'}</td>
-                                <td>${thickness.end_roughness_nm !== null ? thickness.end_roughness_nm.toFixed(4) : 'N/A'}</td>
+                                {% comment %} <td>${thickness.start_roughness_nm !== null ? thickness.start_roughness_nm.toFixed(4) : 'N/A'}</td> {% endcomment %}
+                                {% comment %} <td>${thickness.end_roughness_nm !== null ? thickness.end_roughness_nm.toFixed(4) : 'N/A'}</td> {% endcomment %}
                             </tr>
                         `;
                     }); 
