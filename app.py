@@ -458,20 +458,23 @@ def calculate_thickness():
         # Calculate thicknesses between consecutive interfaces
         thicknesses = []
         image_source = smoothed_image if smoothed_image is not None else current_image
-        interface_roughness = {}
+        interface_roughness_pixels = {}
+        interface_roughness_nm = {}
 
         if image_source is not None:
             for y in all_peaks:
-                interface_roughness[int(y)] = float(np.std(image_source[y, :]))
+                interface_roughness_pixels[int(y)] = float(np.std(image_source[y, :]))
+                interface_roughness_nm[int(y)] = float(np.std(image_source[y, :]))*pixel_size
 
         for i in range(len(all_peaks) - 1):
             y_start = all_peaks[i]
             y_end = all_peaks[i + 1]
             thickness_pixels = y_end - y_start
             thickness_nm = thickness_pixels * pixel_size
-
-            rough_start = interface_roughness.get(int(y_start), None)
-            rough_end = interface_roughness.get(int(y_end), None)
+            rough_start_pixel = interface_roughness_pixels.get(int(y_start), None)
+            rough_end_pixel = interface_roughness_pixels.get(int(y_end), None)
+            rough_start_nm = interface_roughness_nm.get(int(y_start), None)
+            rough_end_nm = interface_roughness_nm.get(int(y_end), None)
 
             thicknesses.append({
                 'layer': int(i + 1),
@@ -479,8 +482,8 @@ def calculate_thickness():
                 'end_interface': int(y_end),
                 'thickness_pixels': int(thickness_pixels),
                 'thickness_nm': float(thickness_nm),
-                'start_roughness': rough_start,
-                'end_roughness': rough_end
+                'start_roughness(nm)': rough_start_nm,
+                'end_roughness(nm)': rough_end_nm
             })
 
                     
@@ -566,57 +569,82 @@ def get_all_interfaces():
         'interfaces': all_interfaces,
         'total_count': len(all_interfaces)
     })
-
 @app.route('/download_csv', methods=['POST'])
 def download_csv():
-    global detected_peaks, manual_peaks, pixel_size, current_image
-    
+    global detected_peaks, manual_peaks, pixel_size, current_image, smoothed_image
+
     if detected_peaks is None and not manual_peaks:
         return jsonify({'error': 'No peaks detected or manually added'})
-    
+
     try:
         # Combine all peaks
         all_peaks = list(detected_peaks) if detected_peaks is not None else []
         all_peaks.extend(manual_peaks)
         all_peaks = sorted(set(all_peaks))
-        
+
         if len(all_peaks) < 2:
             return jsonify({'error': 'At least 2 interfaces needed for thickness calculation'})
-        
-        # Calculate thicknesses
+
+        # Choose image source
+        image_source = smoothed_image if smoothed_image is not None else current_image
+        if image_source is None:
+            return jsonify({'error': 'No image available for roughness calculation'})
+
+        # Compute roughness for all interfaces
+        interface_roughness = {
+            int(y)*pixel_size: float(np.std(image_source[y, :])) for y in all_peaks
+        }
+
+        # Prepare thickness and roughness data
         thicknesses = []
         for i in range(len(all_peaks) - 1):
-            thickness_pixels = all_peaks[i+1] - all_peaks[i]
+            y_start = all_peaks[i]
+            y_end = all_peaks[i + 1]
+            thickness_pixels = y_end - y_start
             thickness_nm = thickness_pixels * pixel_size
+            rough_start = interface_roughness.get(int(y_start), None)
+            rough_end = interface_roughness.get(int(y_end), None)
+
             thicknesses.append({
                 'layer': i + 1,
-                'start_interface': all_peaks[i],
-                'end_interface': all_peaks[i+1],
+                'start_interface': y_start,
+                'end_interface': y_end,
                 'thickness_pixels': thickness_pixels,
-                'thickness_nm': thickness_nm
+                'thickness_nm': thickness_nm,
+                'start_roughness_nm': rough_start,
+                'end_roughness_nm': rough_end
             })
-        
+
         # Create CSV file
         temp_file = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.csv', newline='')
         writer = csv.writer(temp_file)
-        
+
         # Write headers
-        writer.writerow(['Layer', 'Start_Interface', 'End_Interface', 'Thickness_Pixels', 'Thickness_nm'])
-        
+        writer.writerow([
+            'Layer',
+            'Start_Interface',
+            'End_Interface',
+            'Thickness_Pixels',
+            'Thickness_nm',
+            'Start_Interface_Roughness_nm',
+            'End_Interface_Roughness_nm'
+        ])
+
         # Write data
-        for thickness in thicknesses:
+        for t in thicknesses:
             writer.writerow([
-                thickness['layer'],
-                thickness['start_interface'],
-                thickness['end_interface'],
-                thickness['thickness_pixels'],
-                thickness['thickness_nm']
+                t['layer'],
+                t['start_interface'],
+                t['end_interface'],
+                t['thickness_pixels'],
+                f"{t['thickness_nm']:.4f}",
+                f"{t['start_roughness_nm']:.4f}" if t['start_roughness_nm'] is not None else 'N/A',
+                f"{t['end_roughness_nm']:.4f}" if t['end_roughness_nm'] is not None else 'N/A'
             ])
-        
+
         temp_file.close()
-        
         return send_file(temp_file.name, as_attachment=True, download_name='thickness_results.csv')
-        
+
     except Exception as e:
         print(f"Error generating CSV: {e}")
         return jsonify({'error': f'Error generating CSV: {str(e)}'})
