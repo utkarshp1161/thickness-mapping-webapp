@@ -80,6 +80,8 @@
             
             <div class="manual-controls">
                 <button id="addSelectedRegionBtn" disabled>Add Interface from Selected Region</button>
+                <button id="addLocalMinimaBtn" disabled>Add Interface using Local Minima "Mean"</button>
+                <button id="addLocalMaximaBtn" disabled>Add Interface using Local Maxima</button>
                 <button id="clearManualPeaksBtn">Clear All Manual Interfaces</button>
                 <button id="refreshInterfacesBtn">Refresh Interface List</button>
             </div>
@@ -116,21 +118,11 @@
             <div id="thicknessTable"></div>
             <div class="analysis-controls">
                 <button id="downloadCsvBtn">Download CSV</button>
-                <button id="cleanupBtn">Cleanup & Clear Memory</button>
-            </div>
-        </div>
-
-        <!-- Results Section -->
-        <div class="results-section" id="resultsSection" style="display: none;">
-            <h2>Thickness Results</h2>
-            <div id="thicknessStats"></div>
-            <div id="thicknessTable"></div>
-            <div class="analysis-controls">
-                <button id="downloadCsvBtn">Download CSV</button>
                 <button id="downloadAnalysisBtn">Download Analysis Image</button>
                 <button id="cleanupBtn">Cleanup & Clear Memory</button>
             </div>
         </div>
+    </div>
     
     <script>
         let imageShape = null;
@@ -233,11 +225,15 @@
                     <p><strong>Size:</strong> ${xEnd - xStart} × ${yEnd - yStart} pixels</p>
                 `;
                 
-                // Enable add button if selection is valid
+                // Enable add buttons if selection is valid
                 if (xEnd - xStart > 5 && yEnd - yStart > 5) {
                     document.getElementById('addSelectedRegionBtn').disabled = false;
+                    document.getElementById('addLocalMinimaBtn').disabled = false;
+                    document.getElementById('addLocalMaximaBtn').disabled = false;
                 } else {
                     document.getElementById('addSelectedRegionBtn').disabled = true;
+                    document.getElementById('addLocalMinimaBtn').disabled = true;
+                    document.getElementById('addLocalMaximaBtn').disabled = true;
                 }
             }
         }
@@ -333,10 +329,14 @@
                     minX >= 0 && maxX <= imageShape[1] && 
                     minY >= 0 && maxY <= imageShape[0]) {
                     document.getElementById('addSelectedRegionBtn').disabled = false;
+                    document.getElementById('addLocalMinimaBtn').disabled = false;
+                    document.getElementById('addLocalMaximaBtn').disabled = false;
                     showInfo('manualPeakStatus', 
                         `Selection: x[${minX}:${maxX}], y[${minY}:${maxY}]. Click "Add Interface" to detect interface in this region.`);
                 } else {
                     document.getElementById('addSelectedRegionBtn').disabled = true;
+                    document.getElementById('addLocalMinimaBtn').disabled = true;
+                    document.getElementById('addLocalMaximaBtn').disabled = true;
                     if (maxX - minX <= 5 || maxY - minY <= 5) {
                         showError('manualPeakStatus', 'Selection too small. Please select a larger region.');
                     } else {
@@ -416,6 +416,47 @@
                     showError('interfaceManagementStatus', 'Network error: ' + error.message);
                 });
             }
+        }
+
+        function addInterfaceByMethod(method, xStart, xEnd, yStart, yEnd) {
+            if (xStart >= xEnd || yStart >= yEnd) {
+                showError('manualPeakStatus', 'Invalid selection range');
+                return;
+            }
+            
+            showInfo('manualPeakStatus', `Adding interface using local ${method}...`);
+            const button = document.getElementById(method === 'minima' ? 'addLocalMinimaBtn' : 'addLocalMaximaBtn');
+            button.disabled = true;
+            
+            fetch('/add_interface_by_method', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    method: method,
+                    x_start: xStart,
+                    x_end: xEnd,
+                    y_start: yStart,
+                    y_end: yEnd
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                button.disabled = false;
+                
+                if (data.success) {
+                    showSuccess('manualPeakStatus', data.message);
+                    document.getElementById('analysisPlot').src = 'data:image/png;base64,' + data.plot;
+                    loadAllInterfaces();
+                } else {
+                    showError('manualPeakStatus', data.error);
+                }
+            })
+            .catch(error => {
+                button.disabled = false;
+                showError('manualPeakStatus', 'Network error: ' + error.message);
+            });
         }
         
         // Upload functionality
@@ -665,6 +706,26 @@
                 showError('manualPeakStatus', 'Network error: ' + error.message + '. Check console for details.');
             });         
         });
+
+        // Add Local Minima Interface
+        document.getElementById('addLocalMinimaBtn').addEventListener('click', function() {
+            const xStart = parseInt(document.getElementById('xStart').value);
+            const xEnd = parseInt(document.getElementById('xEnd').value);
+            const yStart = parseInt(document.getElementById('yStart').value);
+            const yEnd = parseInt(document.getElementById('yEnd').value);
+            
+            addInterfaceByMethod('minima', xStart, xEnd, yStart, yEnd);
+        });
+
+        // Add Local Maxima Interface
+        document.getElementById('addLocalMaximaBtn').addEventListener('click', function() {
+            const xStart = parseInt(document.getElementById('xStart').value);
+            const xEnd = parseInt(document.getElementById('xEnd').value);
+            const yStart = parseInt(document.getElementById('yStart').value);
+            const yEnd = parseInt(document.getElementById('yEnd').value);
+            
+            addInterfaceByMethod('maxima', xStart, xEnd, yStart, yEnd);
+        });
         
         // Clear Manual Peaks
         document.getElementById('clearManualPeaksBtn').addEventListener('click', function() {
@@ -736,14 +797,6 @@
                             <div class="stat-item">
                                 <strong>Pixel Size:</strong> ${data.stats.pixel_size.toFixed(4)} nm
                             </div>
-                            <div class="stat-item">
-                                <strong>Pixel Size:</strong> ${data.stats.pixel_size.toFixed(4)} nm
-                            </div>
-                            <!-- Optionally if you ever add global mean roughness -->
-                            <!-- <div class="stat-item">
-                                <strong>Mean Roughness:</strong> ${data.stats.mean_roughness?.toFixed(4) ?? 'N/A'}
-                            </div> -->
-
                         </div>
                     `;
                     

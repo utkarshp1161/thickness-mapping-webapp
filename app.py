@@ -92,7 +92,33 @@ def generate_analysis_plot():
             linestyle = '--'
             linewidth = 2
         ax_img.axhline(y, color=color, linestyle=linestyle, linewidth=linewidth)
-    
+
+    # Add thickness measurements as text overlay
+    all_peaks_sorted = sorted(all_peaks)
+    if len(all_peaks_sorted) >= 2:
+        for i in range(len(all_peaks_sorted) - 1):
+            y_start = all_peaks_sorted[i]
+            y_end = all_peaks_sorted[i + 1]
+            thickness_pixels = y_end - y_start
+            thickness_nm = thickness_pixels * pixel_size if pixel_size else thickness_pixels
+            
+            # Calculate text position (middle of the layer)
+            text_y = (y_start + y_end) / 2
+            
+            # Alternate text position (left and right sides)
+            if i % 2 == 0:
+                text_x = smoothed_image.shape[1] * 0.05  # Left side
+                ha = 'left'
+            else:
+                text_x = smoothed_image.shape[1] * 0.95  # Right side
+                ha = 'right'
+            
+            # Add thickness text
+            thickness_text = f'{thickness_nm:.1f} nm' if pixel_size else f'{thickness_pixels} px'
+            ax_img.text(text_x, text_y, thickness_text, 
+                    color='yellow', fontsize=10, fontweight='bold',
+                    ha=ha, va='center',
+                    bbox=dict(boxstyle='round,pad=0.3', facecolor='black', alpha=0.7))
     # Right: Vertical Profiles
     if vertical_profiles is not None:
         y_pixels = np.arange(len(vertical_profiles['mean']))
@@ -401,6 +427,68 @@ def add_manual_peak_region():
         print(f"Error adding manual peak: {e}")
         return jsonify({'error': f'Error adding manual peak: {str(e)}'})
 
+@app.route('/add_interface_by_method', methods=['POST'])
+def add_interface_by_method():
+    global manual_peaks, vertical_profiles
+    
+    if vertical_profiles is None:
+        return jsonify({'error': 'No preprocessed image available'})
+    
+    data = request.json
+    method = data.get('method', 'minima')
+    x_start = int(data.get('x_start', 0))
+    x_end = int(data.get('x_end', 100))
+    y_start = int(data.get('y_start', 0))
+    y_end = int(data.get('y_end', 100))
+    
+    try:
+        print(f"Adding interface using {method} in region x[{x_start}:{x_end}], y[{y_start}:{y_end}]")
+        
+        # Validate range
+        max_y = len(vertical_profiles['mean']) - 1
+        if y_start >= y_end or y_start < 0 or y_end > max_y:
+            return jsonify({'error': 'Invalid Y range specified'})
+        
+        y_start = max(0, min(y_start, max_y))
+        y_end = max(y_start + 1, min(y_end, max_y))
+        
+        # Get the mean profile in the specified region
+        mean_region = vertical_profiles['mean'][y_start:y_end]
+        if len(mean_region) == 0:
+            return jsonify({'error': 'Empty Y range specified'})
+        
+        # Find local minima or maxima
+        if method == 'minima':
+            # Find local minimum
+            offset = np.argmin(mean_region)
+        else:  # maxima
+            # Find local maximum
+            offset = np.argmax(mean_region)
+        
+        manual_peak = y_start + offset
+        
+        # Add to manual peaks if not already present
+        if manual_peak not in manual_peaks:
+            manual_peaks.append(manual_peak)
+            manual_peaks.sort()
+            
+            # Generate updated analysis plot
+            plot_base64 = generate_analysis_plot()
+            
+            return jsonify({
+                'success': True,
+                'plot': plot_base64,
+                'peak_added': int(manual_peak),
+                'manual_peaks': [int(p) for p in manual_peaks],
+                'message': f'Interface added at Y={manual_peak} using local {method} (region: x[{x_start}:{x_end}], y[{y_start}:{y_end}])'
+            })
+        else:
+            return jsonify({'error': f'Interface at Y={manual_peak} already exists'})
+                
+    except Exception as e:
+        print(f"Error adding interface by {method}: {e}")
+        return jsonify({'error': f'Error adding interface by {method}: {str(e)}'})
+    
 @app.route('/remove_interface', methods=['POST'])
 def remove_interface():
     global detected_peaks, manual_peaks
