@@ -793,23 +793,25 @@ def download_analysis_image():
             scale_length_nm = 50
             scale_length_px = scale_length_nm / pixel_size
 
-            # Define position
-            bar_y = height * (1-0.02)  # 2% from bottom
-            bar_x_start = width * 0.05
+            # Define position at bottom-left
+            margin_y = 0.05 * height
+            margin_x = 0.05 * width
+            bar_y = height - margin_y
+            bar_x_start = margin_x
             bar_x_end = bar_x_start + scale_length_px
 
             # Draw scale bar
             ax_img.hlines(bar_y, bar_x_start, bar_x_end, color='white', linewidth=3)
-            ax_img.text((bar_x_start + bar_x_end) / 2, bar_y + height * (1-0.05), f'{scale_length_nm:.0f} nm',
+            ax_img.text((bar_x_start + bar_x_end) / 2, bar_y - 10, f'{scale_length_nm:.0f} nm',
                         color='white', fontsize=10, fontweight='bold',
-                        ha='center', va='bottom', 
+                        ha='center', va='top',
                         bbox=dict(boxstyle='round,pad=0.2', facecolor='black', alpha=0.7))
 
         # ax_img.set_yticks(np.arange(0, height, 50))
 
-        plt.tight_layout()
+        fig.subplots_adjust(left=0.05, right=0.95, top=0.95, bottom=0.05)
         temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
-        fig.savefig(temp_file.name, format='png', bbox_inches='tight', dpi=300)
+        fig.savefig(temp_file.name, format='png', dpi=300)
         plt.close(fig)
 
         return send_file(temp_file.name, as_attachment=True, download_name='smoothed_with_annotations.png')
