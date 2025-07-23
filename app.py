@@ -794,13 +794,13 @@ def download_analysis_image():
             scale_length_px = scale_length_nm / pixel_size
 
             # Define position
-            bar_y = height * 0.02  # 2% from bottom
+            bar_y = height * (1-0.02)  # 2% from bottom
             bar_x_start = width * 0.05
             bar_x_end = bar_x_start + scale_length_px
 
             # Draw scale bar
-            ax_img.hlines(bar_y, bar_x_start, bar_x_end, color='yellow', linewidth=3)
-            ax_img.text((bar_x_start + bar_x_end) / 2, bar_y + height * (1-0.015), f'{scale_length_nm:.0f} nm',
+            ax_img.hlines(bar_y, bar_x_start, bar_x_end, color='white', linewidth=3)
+            ax_img.text((bar_x_start + bar_x_end) / 2, bar_y + height * (1-0.05), f'{scale_length_nm:.0f} nm',
                         color='white', fontsize=10, fontweight='bold',
                         ha='center', va='bottom', 
                         bbox=dict(boxstyle='round,pad=0.2', facecolor='black', alpha=0.7))
