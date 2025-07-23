@@ -808,11 +808,12 @@ def download_analysis_image():
                         bbox=dict(boxstyle='round,pad=0.2', facecolor='black', alpha=0.7))
 
         # ax_img.set_yticks(np.arange(0, height, 50))
-
+        ax_img.axis('off')
         fig.subplots_adjust(left=0.05, right=0.95, top=0.95, bottom=0.05)
         temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
         fig.savefig(temp_file.name, format='png', dpi=300)
         plt.close(fig)
+        
 
         return send_file(temp_file.name, as_attachment=True, download_name='smoothed_with_annotations.png')
 
