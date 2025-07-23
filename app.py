@@ -762,8 +762,8 @@ def download_analysis_image():
 
         ax_img.imshow(smoothed_image, cmap='gray', aspect='equal', origin="upper")
         ax_img.set_title("Smoothed Image with Interfaces")
-        ax_img.set_xlabel("X (pixels)")
-        ax_img.set_ylabel("Y (pixels)")
+        # ax_img.set_xlabel("X (pixels)")
+        # ax_img.set_ylabel("Y (pixels)")
         
         # Interface lines
         # for y in all_peaks:
@@ -788,7 +788,24 @@ def download_analysis_image():
                             ha=ha, va='center',
                             bbox=dict(boxstyle='round,pad=0.3', facecolor='black', alpha=0.7))
 
-        ax_img.set_yticks(np.arange(0, height, 50))
+        # --- Add Scale Bar (50 nm) ---
+        if pixel_size:  # Avoid error if pixel_size is None
+            scale_length_nm = 50
+            scale_length_px = scale_length_nm / pixel_size
+
+            # Define position
+            bar_y = height * 0.02  # 2% from bottom
+            bar_x_start = width * 0.05
+            bar_x_end = bar_x_start + scale_length_px
+
+            # Draw scale bar
+            ax_img.hlines(bar_y, bar_x_start, bar_x_end, color='yellow', linewidth=3)
+            ax_img.text((bar_x_start + bar_x_end) / 2, bar_y + height * 0.015, f'{scale_length_nm:.0f} nm',
+                        color='yellow', fontsize=10, fontweight='bold',
+                        ha='center', va='bottom', 
+                        bbox=dict(boxstyle='round,pad=0.2', facecolor='black', alpha=0.7))
+
+        # ax_img.set_yticks(np.arange(0, height, 50))
 
         plt.tight_layout()
         temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
