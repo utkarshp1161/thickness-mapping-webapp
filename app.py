@@ -55,107 +55,84 @@ def image_to_base64(image_array):
     img_str = base64.b64encode(buffer).decode()
     return img_str
 
-def generate_analysis_plot():
-    """Generate the main analysis plot with three panels"""
-    global original_image, smoothed_image, vertical_profiles, detected_peaks, manual_peaks
-    
-    if original_image is None or smoothed_image is None:
-        return None
-    
-    # Combine auto-detected and manual peaks
+def create_analysis_figure(show_thickness_text=True):
     all_peaks = list(detected_peaks) if detected_peaks is not None else []
     all_peaks.extend(manual_peaks)
-    all_peaks = sorted(set(all_peaks))  # Remove duplicates and sort
-    
+    all_peaks = sorted(set(all_peaks))
+
     fig, (ax_img_raw, ax_img, ax_prof) = plt.subplots(1, 3, figsize=(20, 7), sharey=True)
-    
+
     # Left: Original Image
     ax_img_raw.imshow(original_image, cmap='gray', aspect='auto', origin="lower")
     ax_img_raw.set_title("Original Image")
     ax_img_raw.set_xlabel("X (pixels)")
     ax_img_raw.set_ylabel("Y (pixels)")
-    
+
     # Middle: Smoothed Image with detected interfaces
     ax_img.imshow(smoothed_image, cmap='gray', aspect='auto', origin="lower")
     ax_img.set_title("Smoothed Image with Interfaces")
     ax_img.set_xlabel("X (pixels)")
     ax_img.set_ylabel("Y (pixels)")
-    
-    # Plot interfaces
-    for i, y in enumerate(all_peaks):
-        if detected_peaks is not None and y in detected_peaks:
-            color = 'cyan'
-            linestyle = ':'
-            linewidth = 1
-        else:
-            color = 'red'
-            linestyle = '--'
-            linewidth = 2
-        ax_img.axhline(y, color=color, linestyle=linestyle, linewidth=linewidth)
 
-    # Add thickness measurements as text overlay
-    all_peaks_sorted = sorted(all_peaks)
-    if len(all_peaks_sorted) >= 2:
-        for i in range(len(all_peaks_sorted) - 1):
-            y_start = all_peaks_sorted[i]
-            y_end = all_peaks_sorted[i + 1]
+    # Plot interfaces
+    for y in all_peaks:
+        is_auto = detected_peaks is not None and y in detected_peaks
+        ax_img.axhline(y, color='cyan' if is_auto else 'red',
+                          linestyle=':' if is_auto else '--',
+                          linewidth=1 if is_auto else 2)
+
+    # Annotate thickness
+    if show_thickness_text and len(all_peaks) >= 2:
+        for i in range(len(all_peaks) - 1):
+            y_start, y_end = all_peaks[i], all_peaks[i+1]
+            text_y = (y_start + y_end) / 2
             thickness_pixels = y_end - y_start
             thickness_nm = thickness_pixels * pixel_size if pixel_size else thickness_pixels
-            
-            # Calculate text position (middle of the layer)
-            text_y = (y_start + y_end) / 2
-            
-            # Alternate text position (left and right sides)
-            if i % 2 == 0:
-                text_x = smoothed_image.shape[1] * 0.05  # Left side
-                ha = 'left'
-            else:
-                text_x = smoothed_image.shape[1] * 0.95  # Right side
-                ha = 'right'
-            
-            # Add thickness text
             thickness_text = f'{thickness_nm:.1f} nm' if pixel_size else f'{thickness_pixels} px'
-            ax_img.text(text_x, text_y, thickness_text, 
-                    color='yellow', fontsize=10, fontweight='bold',
-                    ha=ha, va='center',
-                    bbox=dict(boxstyle='round,pad=0.3', facecolor='black', alpha=0.7))
+            text_x = smoothed_image.shape[1] * (0.05 if i % 2 == 0 else 0.95)
+            ha = 'left' if i % 2 == 0 else 'right'
+            ax_img.text(text_x, text_y, thickness_text,
+                        color='yellow', fontsize=10, fontweight='bold',
+                        ha=ha, va='center',
+                        bbox=dict(boxstyle='round,pad=0.3', facecolor='black', alpha=0.7))
+
     # Right: Vertical Profiles
     if vertical_profiles is not None:
         y_pixels = np.arange(len(vertical_profiles['mean']))
         ax_prof.plot(vertical_profiles['mean'], y_pixels, label="Mean", color='black')
         ax_prof.plot(vertical_profiles['std'], y_pixels, label="Std Dev", alpha=0.5, color='blue')
         ax_prof.plot(vertical_profiles['gradient'], y_pixels, label="Gradient", linestyle='--', alpha=0.5, color='green')
-        
-        # Plot interface lines
-        auto_labeled = False
-        manual_labeled = False
+
+        auto_labeled = manual_labeled = False
         for y in all_peaks:
-            if detected_peaks is not None and y in detected_peaks:
-                color = 'cyan'
-                linestyle = '--'
-                label = "Auto Interfaces" if not auto_labeled else None
-                auto_labeled = True
-            else:
-                color = 'red'
-                linestyle = '-'
-                label = "Manual Interfaces" if not manual_labeled else None
-                manual_labeled = True
-            ax_prof.axhline(y, linestyle=linestyle, color=color, alpha=0.8, label=label)
-    
-    ax_prof.set_title("Vertical Profiles & Detected Interfaces")
-    ax_prof.set_xlabel("Intensity")
-    ax_prof.set_ylabel("Y (pixels)")
-    ax_prof.invert_yaxis()
-    ax_prof.legend()
-    ax_prof.grid(True, linestyle=':', alpha=0.4)
-    
-    # Custom Y-axis ticks
+            is_auto = detected_peaks is not None and y in detected_peaks
+            label = "Auto Interfaces" if is_auto and not auto_labeled else (
+                    "Manual Interfaces" if not is_auto and not manual_labeled else None)
+            if is_auto: auto_labeled = True
+            else: manual_labeled = True
+            ax_prof.axhline(y, linestyle='--' if is_auto else '-', color='cyan' if is_auto else 'red', alpha=0.8, label=label)
+
+        ax_prof.set_title("Vertical Profiles & Detected Interfaces")
+        ax_prof.set_xlabel("Intensity")
+        ax_prof.set_ylabel("Y (pixels)")
+        ax_prof.invert_yaxis()
+        ax_prof.legend()
+        ax_prof.grid(True, linestyle=':', alpha=0.4)
+
+    # Y-ticks for all
     yticks = np.arange(0, original_image.shape[0], 50)
-    ax_img_raw.set_yticks(yticks)
-    ax_img.set_yticks(yticks)
-    ax_prof.set_yticks(yticks)
-    
+    for ax in (ax_img_raw, ax_img, ax_prof):
+        ax.set_yticks(yticks)
+
     plt.tight_layout()
+    return fig
+
+def generate_analysis_plot():
+    global original_image, smoothed_image
+    if original_image is None or smoothed_image is None:
+        return None
+
+    fig = create_analysis_figure(show_thickness_text=True)
     return plot_to_base64(fig)
 
 @app.errorhandler(413)
@@ -766,91 +743,63 @@ def cleanup():
 
 @app.route('/download_analysis_image', methods=['POST'])
 def download_analysis_image():
-    global original_image, smoothed_image, vertical_profiles, detected_peaks, manual_peaks
+    global original_image, smoothed_image, detected_peaks, manual_peaks, pixel_size
     
     if original_image is None or smoothed_image is None:
         return jsonify({'error': 'No analysis image available'})
-    
+
     try:
-        # Generate the analysis plot (same as generate_analysis_plot but save to file)
         all_peaks = list(detected_peaks) if detected_peaks is not None else []
         all_peaks.extend(manual_peaks)
         all_peaks = sorted(set(all_peaks))
-        
-        fig, (ax_img_raw, ax_img, ax_prof) = plt.subplots(1, 3, figsize=(20, 7), sharey=True)
-        
-        # Left: Original Image
-        ax_img_raw.imshow(original_image, cmap='gray', aspect='auto', origin="lower")
-        ax_img_raw.set_title("Original Image")
-        ax_img_raw.set_xlabel("X (pixels)")
-        ax_img_raw.set_ylabel("Y (pixels)")
-        
-        # Middle: Smoothed Image with detected interfaces
+
+        # Only one panel: annotated smoothed image
+        fig, ax_img = plt.subplots(figsize=(8, 10))
+
         ax_img.imshow(smoothed_image, cmap='gray', aspect='auto', origin="lower")
         ax_img.set_title("Smoothed Image with Interfaces")
         ax_img.set_xlabel("X (pixels)")
         ax_img.set_ylabel("Y (pixels)")
-        
-        # Plot interfaces
-        for i, y in enumerate(all_peaks):
-            if detected_peaks is not None and y in detected_peaks:
-                color = 'cyan'
-                linestyle = ':'
-                linewidth = 1
-            else:
-                color = 'red'
-                linestyle = '--'
-                linewidth = 2
-            ax_img.axhline(y, color=color, linestyle=linestyle, linewidth=linewidth)
-        
-        # Right: Vertical Profiles
-        if vertical_profiles is not None:
-            y_pixels = np.arange(len(vertical_profiles['mean']))
-            ax_prof.plot(vertical_profiles['mean'], y_pixels, label="Mean", color='black')
-            ax_prof.plot(vertical_profiles['std'], y_pixels, label="Std Dev", alpha=0.5, color='blue')
-            ax_prof.plot(vertical_profiles['gradient'], y_pixels, label="Gradient", linestyle='--', alpha=0.5, color='green')
-            
-            # Plot interface lines
-            auto_labeled = False
-            manual_labeled = False
-            for y in all_peaks:
-                if detected_peaks is not None and y in detected_peaks:
-                    color = 'cyan'
-                    linestyle = '--'
-                    label = "Auto Interfaces" if not auto_labeled else None
-                    auto_labeled = True
-                else:
-                    color = 'red'
-                    linestyle = '-'
-                    label = "Manual Interfaces" if not manual_labeled else None
-                    manual_labeled = True
-                ax_prof.axhline(y, linestyle=linestyle, color=color, alpha=0.8, label=label)
-        
-        ax_prof.set_title("Vertical Profiles & Detected Interfaces")
-        ax_prof.set_xlabel("Intensity")
-        ax_prof.set_ylabel("Y (pixels)")
-        ax_prof.invert_yaxis()
-        ax_prof.legend()
-        ax_prof.grid(True, linestyle=':', alpha=0.4)
-        
-        # Custom Y-axis ticks
-        yticks = np.arange(0, original_image.shape[0], 50)
-        ax_img_raw.set_yticks(yticks)
+
+        # Interface lines
+        for y in all_peaks:
+            is_auto = detected_peaks is not None and y in detected_peaks
+            ax_img.axhline(y, color='cyan' if is_auto else 'red',
+                              linestyle=':' if is_auto else '--',
+                              linewidth=1 if is_auto else 2)
+
+        # Annotate thickness
+        if len(all_peaks) >= 2:
+            for i in range(len(all_peaks) - 1):
+                y_start, y_end = all_peaks[i], all_peaks[i+1]
+                text_y = (y_start + y_end) / 2
+                thickness_pixels = y_end - y_start
+                thickness_nm = thickness_pixels * pixel_size if pixel_size else thickness_pixels
+                thickness_text = f'{thickness_nm:.1f} nm' if pixel_size else f'{thickness_pixels} px'
+
+                text_x = smoothed_image.shape[1] * (0.05 if i % 2 == 0 else 0.95)
+                ha = 'left' if i % 2 == 0 else 'right'
+
+                ax_img.text(text_x, text_y, thickness_text,
+                            color='yellow', fontsize=10, fontweight='bold',
+                            ha=ha, va='center',
+                            bbox=dict(boxstyle='round,pad=0.3', facecolor='black', alpha=0.7))
+
+        yticks = np.arange(0, smoothed_image.shape[0], 50)
         ax_img.set_yticks(yticks)
-        ax_prof.set_yticks(yticks)
-        
+
         plt.tight_layout()
-        
-        # Save to temporary file
+
+        # Save to temp file
         temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
         fig.savefig(temp_file.name, format='png', bbox_inches='tight', dpi=300)
         plt.close(fig)
-        
-        return send_file(temp_file.name, as_attachment=True, download_name='analysis_with_interfaces.png')
-        
+
+        return send_file(temp_file.name, as_attachment=True, download_name='smoothed_with_annotations.png')
+
     except Exception as e:
-        print(f"Error generating analysis image: {e}")
-        return jsonify({'error': f'Error generating analysis image: {str(e)}'})
-    
+        print(f"Error generating image: {e}")
+        return jsonify({'error': str(e)})
+
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5001)
