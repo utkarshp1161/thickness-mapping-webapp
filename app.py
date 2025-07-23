@@ -800,8 +800,8 @@ def download_analysis_image():
 
             # Draw scale bar
             ax_img.hlines(bar_y, bar_x_start, bar_x_end, color='yellow', linewidth=3)
-            ax_img.text((bar_x_start + bar_x_end) / 2, bar_y + height * 0.015, f'{scale_length_nm:.0f} nm',
-                        color='yellow', fontsize=10, fontweight='bold',
+            ax_img.text((bar_x_start + bar_x_end) / 2, bar_y + height * (1-0.015), f'{scale_length_nm:.0f} nm',
+                        color='white', fontsize=10, fontweight='bold',
                         ha='center', va='bottom', 
                         bbox=dict(boxstyle='round,pad=0.2', facecolor='black', alpha=0.7))
 
