@@ -744,7 +744,7 @@ def cleanup():
 @app.route('/download_analysis_image', methods=['POST'])
 def download_analysis_image():
     global original_image, smoothed_image, detected_peaks, manual_peaks, pixel_size
-    
+
     if original_image is None or smoothed_image is None:
         return jsonify({'error': 'No analysis image available'})
 
@@ -753,21 +753,24 @@ def download_analysis_image():
         all_peaks.extend(manual_peaks)
         all_peaks = sorted(set(all_peaks))
 
+        height, width = smoothed_image.shape
+        aspect_ratio = width / height
+        fig_width = 8
+        fig_height = fig_width / aspect_ratio
         # Only one panel: annotated smoothed image
-        fig, ax_img = plt.subplots(figsize=(8, 10))
+        fig, ax_img = plt.subplots(figsize=(fig_width, fig_height))
 
-        ax_img.imshow(smoothed_image, cmap='gray', aspect='auto', origin="lower")
+        ax_img.imshow(smoothed_image, cmap='gray', aspect='equal', origin="lower")
         ax_img.set_title("Smoothed Image with Interfaces")
         ax_img.set_xlabel("X (pixels)")
         ax_img.set_ylabel("Y (pixels)")
-
+        
         # Interface lines
-        for y in all_peaks:
-            is_auto = detected_peaks is not None and y in detected_peaks
-            ax_img.axhline(y, color='cyan' if is_auto else 'red',
-                              linestyle=':' if is_auto else '--',
-                              linewidth=1 if is_auto else 2)
-
+        # for y in all_peaks:
+        #     is_auto = detected_peaks is not None and y in detected_peaks
+        #     ax_img.axhline(y, color='cyan' if is_auto else 'red',
+        #                       linestyle=':' if is_auto else '--',
+        #                       linewidth=1 if is_auto else 2)
         # Annotate thickness
         if len(all_peaks) >= 2:
             for i in range(len(all_peaks) - 1):
@@ -777,7 +780,7 @@ def download_analysis_image():
                 thickness_nm = thickness_pixels * pixel_size if pixel_size else thickness_pixels
                 thickness_text = f'{thickness_nm:.1f} nm' if pixel_size else f'{thickness_pixels} px'
 
-                text_x = smoothed_image.shape[1] * (0.05 if i % 2 == 0 else 0.95)
+                text_x = width * (0.05 if i % 2 == 0 else 0.95)
                 ha = 'left' if i % 2 == 0 else 'right'
 
                 ax_img.text(text_x, text_y, thickness_text,
@@ -785,12 +788,9 @@ def download_analysis_image():
                             ha=ha, va='center',
                             bbox=dict(boxstyle='round,pad=0.3', facecolor='black', alpha=0.7))
 
-        yticks = np.arange(0, smoothed_image.shape[0], 50)
-        ax_img.set_yticks(yticks)
+        ax_img.set_yticks(np.arange(0, height, 50))
 
         plt.tight_layout()
-
-        # Save to temp file
         temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
         fig.savefig(temp_file.name, format='png', bbox_inches='tight', dpi=300)
         plt.close(fig)
