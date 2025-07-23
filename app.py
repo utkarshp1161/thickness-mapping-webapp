@@ -760,7 +760,7 @@ def download_analysis_image():
         # Only one panel: annotated smoothed image
         fig, ax_img = plt.subplots(figsize=(fig_width, fig_height))
 
-        ax_img.imshow(smoothed_image, cmap='gray', aspect='equal', origin="lower")
+        ax_img.imshow(smoothed_image, cmap='gray', aspect='equal', origin="upper")
         ax_img.set_title("Smoothed Image with Interfaces")
         ax_img.set_xlabel("X (pixels)")
         ax_img.set_ylabel("Y (pixels)")
