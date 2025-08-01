@@ -474,35 +474,42 @@ def remove_interface():
     peak_to_remove = int(data.get('peak', 0))
     
     try:
+        print(f"Attempting to remove interface at Y={peak_to_remove}")
         removed_from = None
         
         # Try to remove from manual peaks first
         if peak_to_remove in manual_peaks:
             manual_peaks.remove(peak_to_remove)
             removed_from = "manual"
+            print(f"Removed from manual peaks. Remaining: {manual_peaks}")
         # Then try to remove from detected peaks
         elif detected_peaks is not None and peak_to_remove in detected_peaks:
             detected_peaks.remove(peak_to_remove)
             removed_from = "auto"
+            print(f"Removed from auto peaks. Remaining: {detected_peaks}")
         else:
-            return jsonify({'error': 'Interface not found'})
+            print(f"Interface at Y={peak_to_remove} not found in any list")
+            return jsonify({'success': False, 'error': 'Interface not found'})
         
         # Generate updated analysis plot
         plot_base64 = generate_analysis_plot()
         
-        return jsonify({
+        response_data = {
             'success': True,
             'plot': plot_base64,
             'peak_removed': peak_to_remove,
             'removed_from': removed_from,
-            'manual_peaks': manual_peaks,
-            'auto_peaks': detected_peaks if detected_peaks is not None else [],
+            'manual_peaks': [int(p) for p in manual_peaks],
+            'auto_peaks': [int(p) for p in detected_peaks] if detected_peaks is not None else [],
             'message': f'Interface at Y={peak_to_remove} removed from {removed_from} interfaces'
-        })
+        }
+        
+        print(f"Removal successful. Response: {response_data['message']}")
+        return jsonify(response_data)
         
     except Exception as e:
         print(f"Error removing interface: {e}")
-        return jsonify({'error': f'Error removing interface: {str(e)}'})
+        return jsonify({'success': False, 'error': f'Error removing interface: {str(e)}'})
 
 @app.route('/calculate_thickness', methods=['POST'])
 def calculate_thickness():

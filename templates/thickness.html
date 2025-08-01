@@ -355,9 +355,17 @@
         }
         
         function loadAllInterfaces() {
+            showInfo('interfaceManagementStatus', 'Loading interfaces...');
+            
             fetch('/get_all_interfaces')
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
             .then(data => {
+                console.log('Load interfaces response:', data); // Debug log
                 if (data.success) {
                     updateInterfacesList(data.interfaces);
                     showSuccess('interfaceManagementStatus', `Loaded ${data.total_count} interfaces`);
@@ -366,33 +374,55 @@
                 }
             })
             .catch(error => {
+                console.error('Load interfaces error:', error); // Debug log
                 showError('interfaceManagementStatus', 'Network error: ' + error.message);
             });
         }
         
         function updateInterfacesList(interfaces) {
             const listElement = document.getElementById('interfacesList');
+            
             if (interfaces.length === 0) {
                 listElement.innerHTML = '<p>No interfaces detected or added</p>';
                 return;
             }
             
-            let html = '<h4>All Interfaces:</h4><div class="interfaces-grid">';
+            let html = '<h4>All Interfaces:</h4><div class="interfaces-grid" id="interfacesGrid">';
             interfaces.forEach((interface, index) => {
                 html += `
                     <div class="interface-item ${interface.type}">
                         <span class="interface-position">Y = ${interface.y_position}</span>
                         <span class="interface-type">${interface.type}</span>
-                        <button class="remove-btn" onclick="removeInterface(${interface.y_position})">Remove</button>
+                        <button class="remove-btn" data-peak="${interface.y_position}">Remove</button>
                     </div>
                 `;
             });
             html += '</div>';
             listElement.innerHTML = html;
+            
+            // Add event delegation for remove buttons
+            setupRemoveButtonHandlers();
+        }
+
+        function setupRemoveButtonHandlers() {
+            // Remove existing event listeners to prevent duplicates
+            const interfacesGrid = document.getElementById('interfacesGrid');
+            if (interfacesGrid) {
+                // Use event delegation
+                interfacesGrid.addEventListener('click', function(event) {
+                    if (event.target.classList.contains('remove-btn')) {
+                        const peak = parseInt(event.target.getAttribute('data-peak'));
+                        removeInterface(peak);
+                    }
+                });
+            }
         }
         
         function removeInterface(peak) {
             if (confirm(`Are you sure you want to remove interface at Y=${peak}?`)) {
+                // Show loading state
+                showInfo('interfaceManagementStatus', `Removing interface at Y=${peak}...`);
+                
                 fetch('/remove_interface', {
                     method: 'POST',
                     headers: {
@@ -402,17 +432,33 @@
                         peak: peak
                     })
                 })
-                .then(response => response.json())
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
                 .then(data => {
+                    console.log('Remove interface response:', data); // Debug log
                     if (data.success) {
                         showSuccess('interfaceManagementStatus', data.message);
-                        document.getElementById('analysisPlot').src = 'data:image/png;base64,' + data.plot;
-                        loadAllInterfaces(); // Refresh the list
+                        
+                        // Update the analysis plot
+                        if (data.plot) {
+                            document.getElementById('analysisPlot').src = 'data:image/png;base64,' + data.plot;
+                        }
+                        
+                        // Force refresh the interface list
+                        setTimeout(() => {
+                            loadAllInterfaces();
+                        }, 100); // Small delay to ensure backend is updated
+                        
                     } else {
-                        showError('interfaceManagementStatus', data.error);
+                        showError('interfaceManagementStatus', data.error || 'Failed to remove interface');
                     }
                 })
                 .catch(error => {
+                    console.error('Remove interface error:', error); // Debug log
                     showError('interfaceManagementStatus', 'Network error: ' + error.message);
                 });
             }
@@ -936,6 +982,16 @@
             .catch(error => {
                 showError('interfaceManagementStatus', 'Error downloading analysis image: ' + error.message);
             });
+        });
+        // Initialize event handlers when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('Page loaded, setting up event handlers');
+            
+            // Ensure interface list is properly set up if it exists
+            const interfacesList = document.getElementById('interfacesList');
+            if (interfacesList && interfacesList.innerHTML.trim() !== '') {
+                setupRemoveButtonHandlers();
+            }
         });
     </script>
 </body>
