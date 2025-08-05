@@ -413,3 +413,11 @@ table tr:nth-child(even) {
 #downloadAnalysisBtn:hover {
     background-color: #138496;
 }
+
+#downloadRoughnessBtn {
+    background-color: #6f42c1;
+}
+
+#downloadRoughnessBtn:hover {
+    background-color: #5a2d91;
+}

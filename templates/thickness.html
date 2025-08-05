@@ -8,7 +8,7 @@
 </head>
 <body>
     <div class="container">
-        <h1>Human in the loop: Layer Thickness Measurement Tool</h1>
+        <h1>Human in the loop: Layer Thickness & Interface Roughness Measurement Tool</h1>
         
         <!-- File Upload Section -->
         <div class="upload-section">
@@ -106,19 +106,20 @@
                 <img id="analysisPlot" src="" alt="Analysis Plot">
             </div>
             <div class="analysis-controls">
-                <button id="calculateThicknessBtn">Calculate Layer Thickness</button>
+                <button id="calculateThicknessBtn">Calculate Layer Thickness & Roughness</button>
                 <button id="resetAnalysisBtn">Reset Analysis</button>
             </div>
         </div>
         
         <!-- Results Section -->
         <div class="results-section" id="resultsSection" style="display: none;">
-            <h2>Thickness Results</h2>
+            <h2>Thickness & Roughness Results</h2>
             <div id="thicknessStats"></div>
             <div id="thicknessTable"></div>
             <div class="analysis-controls">
                 <button id="downloadCsvBtn">Download CSV</button>
                 <button id="downloadAnalysisBtn">Download Analysis Image</button>
+                <button id="downloadRoughnessBtn">Download Roughness Image</button>
                 <button id="cleanupBtn">Cleanup & Clear Memory</button>
             </div>
         </div>
@@ -801,9 +802,9 @@
         // Load Interfaces
         document.getElementById('loadInterfacesBtn').addEventListener('click', loadAllInterfaces);
         
-        // Calculate Thickness
+        // Calculate Thickness & Roughness
         document.getElementById('calculateThicknessBtn').addEventListener('click', function() {
-            showInfo('interfaceManagementStatus', 'Calculating thickness...');
+            showInfo('interfaceManagementStatus', 'Calculating thickness and roughness...');
             
             fetch('/calculate_thickness', {
                 method: 'POST'
@@ -811,7 +812,7 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    showSuccess('interfaceManagementStatus', 'Thickness calculated successfully!');
+                    showSuccess('interfaceManagementStatus', 'Thickness and roughness calculated successfully!');
                     
                     // Update statistics
                     document.getElementById('thicknessStats').innerHTML = `
@@ -841,24 +842,56 @@
                                 <strong>Max Thickness:</strong> ${data.stats.max_thickness.toFixed(2)} nm
                             </div>
                             <div class="stat-item">
+                                <strong>Mean Roughness:</strong> ${data.stats.mean_roughness.toFixed(3)} nm
+                            </div>
+                            <div class="stat-item">
+                                <strong>Std Roughness:</strong> ${data.stats.std_roughness.toFixed(3)} nm
+                            </div>
+                            <div class="stat-item">
+                                <strong>Min Roughness:</strong> ${data.stats.min_roughness.toFixed(3)} nm
+                            </div>
+                            <div class="stat-item">
+                                <strong>Max Roughness:</strong> ${data.stats.max_roughness.toFixed(3)} nm
+                            </div>
+                            <div class="stat-item">
                                 <strong>Pixel Size:</strong> ${data.stats.pixel_size.toFixed(4)} nm
                             </div>
                         </div>
                     `;
                     
-                    // Update thickness table
-                    let tableHtml = '<table><thead><tr><th>Layer</th><th>Start Interface</th><th>End Interface</th><th>Thickness (pixels)</th><th>Thickness (nm)</th></tr></thead><tbody>';
+                    // Update thickness table with roughness
+                    let tableHtml = `
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Layer</th>
+                                    <th>Start Interface</th>
+                                    <th>End Interface</th>
+                                    <th>Thickness (nm)</th>
+                                    <th>Start Roughness (nm)</th>
+                                    <th>End Roughness (nm)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                    `;
+                    
                     data.thicknesses.forEach(thickness => {
+                        const startRoughness = thickness.start_roughness_valid ? 
+                            thickness.start_roughness_nm.toFixed(3) : 'N/A';
+                        const endRoughness = thickness.end_roughness_valid ? 
+                            thickness.end_roughness_nm.toFixed(3) : 'N/A';
+                        
                         tableHtml += `
                             <tr>
                                 <td>${thickness.layer}</td>
                                 <td>${thickness.start_interface}</td>
                                 <td>${thickness.end_interface}</td>
-                                <td>${thickness.thickness_pixels}</td>
                                 <td>${thickness.thickness_nm.toFixed(2)}</td>
+                                <td>${startRoughness}</td>
+                                <td>${endRoughness}</td>
                             </tr>
                         `;
-                    }); 
+                    });
 
                     tableHtml += '</tbody></table>';
                     document.getElementById('thicknessTable').innerHTML = tableHtml;
@@ -896,6 +929,7 @@
 
             }
         });
+        
         // Download CSV
         document.getElementById('downloadCsvBtn').addEventListener('click', function() {
             showInfo('interfaceManagementStatus', 'Generating CSV...');
@@ -915,7 +949,7 @@
                 const url = window.URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = 'thickness_results.csv';
+                a.download = 'thickness_roughness_results.csv';
                 document.body.appendChild(a);
                 a.click();
                 window.URL.revokeObjectURL(url);
@@ -983,6 +1017,38 @@
                 showError('interfaceManagementStatus', 'Error downloading analysis image: ' + error.message);
             });
         });
+
+        // Download Roughness Image
+        document.getElementById('downloadRoughnessBtn').addEventListener('click', function() {
+            showInfo('interfaceManagementStatus', 'Generating roughness analysis image...');
+            
+            fetch('/download_roughness_image', {
+                method: 'POST'
+            })
+            .then(response => {
+                if (response.ok) {
+                    return response.blob();
+                }
+                return response.json().then(data => {
+                    throw new Error(data.error || 'Unknown error');
+                });
+            })
+            .then(blob => {
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'interface_roughness_analysis.png';
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+                showSuccess('interfaceManagementStatus', 'Roughness analysis image downloaded successfully!');
+            })
+            .catch(error => {
+                showError('interfaceManagementStatus', 'Error downloading roughness image: ' + error.message);
+            });
+        });
+        
         // Initialize event handlers when page loads
         document.addEventListener('DOMContentLoaded', function() {
             console.log('Page loaded, setting up event handlers');

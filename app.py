@@ -513,7 +513,7 @@ def remove_interface():
 
 @app.route('/calculate_thickness', methods=['POST'])
 def calculate_thickness():
-    global detected_peaks, manual_peaks, pixel_size
+    global detected_peaks, manual_peaks, pixel_size, smoothed_image
     
     if detected_peaks is None and not manual_peaks:
         return jsonify({'error': 'No peaks detected or manually added'})
@@ -527,40 +527,48 @@ def calculate_thickness():
         if len(all_peaks) < 2:
             return jsonify({'error': 'At least 2 interfaces needed for thickness calculation'})
         
+        # Choose image source for roughness calculation
+        image_source = smoothed_image if smoothed_image is not None else current_image
+        
+        # Calculate roughness for each interface
+        interface_roughness = {}
+        if image_source is not None:
+            for y in all_peaks:
+                roughness_data = calculate_interface_roughness(y, image_source, pixel_size)
+                if roughness_data['valid']:
+                    interface_roughness[int(y)] = roughness_data
+        
         # Calculate thicknesses between consecutive interfaces
         thicknesses = []
-        # image_source = smoothed_image if smoothed_image is not None else current_image
-        # interface_roughness_pixels = {}
-        # interface_roughness_nm = {}
-
-        # if image_source is not None:
-        #     for y in all_peaks:
-        #         interface_roughness_pixels[int(y)] = float(np.std(image_source[y, :]))
-        #         interface_roughness_nm[int(y)] = float(np.std(image_source[y, :]))*pixel_size
-
         for i in range(len(all_peaks) - 1):
             y_start = all_peaks[i]
             y_end = all_peaks[i + 1]
             thickness_pixels = y_end - y_start
             thickness_nm = thickness_pixels * pixel_size
-            # rough_start_pixel = interface_roughness_pixels.get(int(y_start), None)
-            # rough_end_pixel = interface_roughness_pixels.get(int(y_end), None)
-            # rough_start_nm = interface_roughness_nm.get(int(y_start), None)
-            # rough_end_nm = interface_roughness_nm.get(int(y_end), None)
-
+            
+            # Get roughness data
+            start_roughness = interface_roughness.get(int(y_start), {})
+            end_roughness = interface_roughness.get(int(y_end), {})
+            
             thicknesses.append({
                 'layer': int(i + 1),
                 'start_interface': int(y_start),
                 'end_interface': int(y_end),
                 'thickness_pixels': int(thickness_pixels),
-                'thickness_nm': float(thickness_nm)
-                # 'start_roughness_nm': rough_start_nm,
-                # 'end_roughness_nm': rough_end_nm
+                'thickness_nm': float(thickness_nm),
+                'start_roughness_nm': float(start_roughness.get('roughness_nm', 0.0)),
+                'end_roughness_nm': float(end_roughness.get('roughness_nm', 0.0)),
+                'start_roughness_valid': start_roughness.get('valid', False),
+                'end_roughness_valid': end_roughness.get('valid', False)
             })
-
-                    
+        
         # Calculate statistics
         thickness_values = [t['thickness_nm'] for t in thicknesses]
+        valid_roughness_values = []
+        for y, data in interface_roughness.items():
+            if data['valid']:
+                valid_roughness_values.append(data['roughness_nm'])
+        
         stats = {
             'mean_thickness': float(np.mean(thickness_values)),
             'std_thickness': float(np.std(thickness_values)),
@@ -570,14 +578,21 @@ def calculate_thickness():
             'total_interfaces': int(len(all_peaks)),
             'auto_interfaces': int(len(detected_peaks)) if detected_peaks is not None else 0,
             'manual_interfaces': int(len(manual_peaks)),
-            'pixel_size': float(pixel_size)
+            'pixel_size': float(pixel_size),
+            'mean_roughness': float(np.mean(valid_roughness_values)) if valid_roughness_values else 0.0,
+            'std_roughness': float(np.std(valid_roughness_values)) if valid_roughness_values else 0.0,
+            'min_roughness': float(np.min(valid_roughness_values)) if valid_roughness_values else 0.0,
+            'max_roughness': float(np.max(valid_roughness_values)) if valid_roughness_values else 0.0,
+            'valid_roughness_count': len(valid_roughness_values)
         }
+        
         all_peaks = [int(p) for p in all_peaks]
         return jsonify({
             'success': True,
             'thicknesses': thicknesses,
             'stats': stats,
-            'all_peaks': all_peaks
+            'all_peaks': all_peaks,
+            'interface_roughness': {int(k): v for k, v in interface_roughness.items()}
         })
         
     except Exception as e:
@@ -662,10 +677,12 @@ def download_csv():
         if image_source is None:
             return jsonify({'error': 'No image available for roughness calculation'})
 
-        # interface_roughness = {
-        #     int(y): float(np.std(image_source[y, :])) * pixel_size for y in all_peaks
-        # }
-
+        # Calculate roughness for each interface
+        interface_roughness = {}
+        for y in all_peaks:
+            roughness_data = calculate_interface_roughness(y, image_source, pixel_size)
+            if roughness_data['valid']:
+                interface_roughness[int(y)] = roughness_data
 
         # Prepare thickness and roughness data
         thicknesses = []
@@ -674,17 +691,18 @@ def download_csv():
             y_end = all_peaks[i + 1]
             thickness_pixels = y_end - y_start
             thickness_nm = thickness_pixels * pixel_size
-            # rough_start = interface_roughness.get(int(y_start), None)
-            # rough_end = interface_roughness.get(int(y_end), None)
+            
+            start_roughness = interface_roughness.get(int(y_start), {})
+            end_roughness = interface_roughness.get(int(y_end), {})
 
             thicknesses.append({
                 'layer': i + 1,
                 'start_interface': y_start,
                 'end_interface': y_end,
                 'thickness_pixels': thickness_pixels,
-                'thickness_nm': thickness_nm
-                # 'start_roughness_nm': rough_start,
-                # 'end_roughness_nm': rough_end
+                'thickness_nm': thickness_nm,
+                'start_roughness_nm': start_roughness.get('roughness_nm', 0.0),
+                'end_roughness_nm': end_roughness.get('roughness_nm', 0.0)
             })
 
         # Create CSV file
@@ -697,9 +715,9 @@ def download_csv():
             'Start_Interface',
             'End_Interface',
             'Thickness_Pixels',
-            'Thickness_nm'
-            # 'Start_Interface_Roughness_nm',
-            # 'End_Interface_Roughness_nm'
+            'Thickness_nm',
+            'Start_Interface_Roughness_nm',
+            'End_Interface_Roughness_nm'
         ])
 
         # Write data
@@ -709,13 +727,13 @@ def download_csv():
                 t['start_interface'],
                 t['end_interface'],
                 t['thickness_pixels'],
-                f"{t['thickness_nm']:.4f}"
-                # f"{t['start_roughness_nm']:.4f}" if t['start_roughness_nm'] is not None else 'N/A',
-                # f"{t['end_roughness_nm']:.4f}" if t['end_roughness_nm'] is not None else 'N/A'
+                f"{t['thickness_nm']:.4f}",
+                f"{t['start_roughness_nm']:.4f}",
+                f"{t['end_roughness_nm']:.4f}"
             ])
 
         temp_file.close()
-        return send_file(temp_file.name, as_attachment=True, download_name='thickness_results.csv')
+        return send_file(temp_file.name, as_attachment=True, download_name='thickness_roughness_results.csv')
 
     except Exception as e:
         print(f"Error generating CSV: {e}")
@@ -828,5 +846,174 @@ def download_analysis_image():
         print(f"Error generating image: {e}")
         return jsonify({'error': str(e)})
 
+def calculate_interface_roughness(y_position, image_source, pixel_size, method='rms'):
+    """
+    Calculate interface roughness from horizontal line profile
+    
+    Args:
+        y_position: Y coordinate of the interface
+        image_source: 2D numpy array (smoothed or original image)
+        pixel_size: Pixel size in nm
+        method: Roughness calculation method ('rms', 'ra', 'rmax')
+    
+    Returns:
+        dict: Roughness values in pixels and nm
+    """
+    try:
+        # Extract horizontal line profile at y_position
+        if y_position < 0 or y_position >= image_source.shape[0]:
+            return {'roughness_pixels': 0.0, 'roughness_nm': 0.0, 'valid': False}
+        
+        profile = image_source[int(y_position), :]
+        
+        # Calculate reference line (mean value)
+        reference = np.mean(profile)
+        
+        # Calculate deviations from reference
+        deviations = profile - reference
+        
+        # Calculate roughness based on method
+        if method == 'rms':
+            # Root Mean Square roughness
+            roughness_pixels = np.sqrt(np.mean(deviations**2))
+        elif method == 'ra':
+            # Average roughness
+            roughness_pixels = np.mean(np.abs(deviations))
+        elif method == 'rmax':
+            # Maximum peak-to-valley roughness
+            roughness_pixels = np.max(profile) - np.min(profile)
+        else:
+            roughness_pixels = np.sqrt(np.mean(deviations**2))  # Default to RMS
+        
+        # Convert to nanometers
+        roughness_nm = roughness_pixels * pixel_size
+        
+        return {
+            'roughness_pixels': float(roughness_pixels),
+            'roughness_nm': float(roughness_nm),
+            'valid': True,
+            'profile_points': len(profile),
+            'reference_value': float(reference)
+        }
+        
+    except Exception as e:
+        print(f"Error calculating roughness for interface at Y={y_position}: {e}")
+        return {'roughness_pixels': 0.0, 'roughness_nm': 0.0, 'valid': False}
+
+def create_roughness_analysis_figure():
+    """Create figure showing smoothed image with roughness annotations"""
+    global smoothed_image, detected_peaks, manual_peaks, pixel_size
+    
+    if smoothed_image is None:
+        return None
+    
+    # Combine all peaks
+    all_peaks = list(detected_peaks) if detected_peaks is not None else []
+    all_peaks.extend(manual_peaks)
+    all_peaks = sorted(set(all_peaks))
+    
+    if len(all_peaks) == 0:
+        return None
+    
+    # Calculate roughness for each interface
+    interface_roughness = {}
+    for y in all_peaks:
+        roughness_data = calculate_interface_roughness(y, smoothed_image, pixel_size)
+        if roughness_data['valid']:
+            interface_roughness[y] = roughness_data
+    
+    height, width = smoothed_image.shape
+    aspect_ratio = width / height
+    fig_width = 10
+    fig_height = fig_width / aspect_ratio
+    
+    fig, ax = plt.subplots(figsize=(fig_width, fig_height))
+    
+    # Display smoothed image
+    ax.imshow(smoothed_image, cmap='gray', aspect='equal', origin="upper")
+    ax.set_title("Interface Roughness Analysis", fontsize=14, fontweight='bold')
+    
+    # Draw interface lines and annotate roughness
+    for i, y in enumerate(all_peaks):
+        is_auto = detected_peaks is not None and y in detected_peaks
+        color = 'cyan' if is_auto else 'red'
+        linestyle = ':' if is_auto else '--'
+        linewidth = 1.5 if is_auto else 2.5
+        
+        # Draw interface line
+        ax.axhline(y, color=color, linestyle=linestyle, linewidth=linewidth, alpha=0.8)
+        
+        # Add roughness annotation
+        if y in interface_roughness:
+            roughness_nm = interface_roughness[y]['roughness_nm']
+            
+            # Position text alternately on left and right
+            text_x = width * (0.02 if i % 2 == 0 else 0.98)
+            ha = 'left' if i % 2 == 0 else 'right'
+            
+            # Create roughness text
+            roughness_text = f'R={roughness_nm:.2f} nm'
+            
+            ax.text(text_x, y, roughness_text,
+                   color='white', fontsize=9, fontweight='bold',
+                   ha=ha, va='center',
+                   bbox=dict(boxstyle='round,pad=0.3', 
+                           facecolor=color, alpha=0.8, edgecolor='white'))
+    
+    # Add scale bar
+    if pixel_size:
+        scale_length_nm = 50
+        scale_length_px = scale_length_nm / pixel_size
+        
+        margin_y = 0.05 * height
+        margin_x = 0.05 * width
+        bar_y = height - margin_y
+        bar_x_start = margin_x
+        bar_x_end = bar_x_start + scale_length_px
+        
+        ax.hlines(bar_y, bar_x_start, bar_x_end, color='white', linewidth=3)
+        ax.text((bar_x_start + bar_x_end) / 2, bar_y - 10, f'{scale_length_nm:.0f} nm',
+               color='white', fontsize=10, fontweight='bold',
+               ha='center', va='top',
+               bbox=dict(boxstyle='round,pad=0.2', facecolor='black', alpha=0.7))
+    
+    # Add legend
+    legend_elements = []
+    if detected_peaks and len(detected_peaks) > 0:
+        legend_elements.append(plt.Line2D([0], [0], color='cyan', linestyle=':', linewidth=2, label='Auto Interfaces'))
+    if manual_peaks and len(manual_peaks) > 0:
+        legend_elements.append(plt.Line2D([0], [0], color='red', linestyle='--', linewidth=2, label='Manual Interfaces'))
+    
+    if legend_elements:
+        ax.legend(handles=legend_elements, loc='upper right', bbox_to_anchor=(0.98, 0.98))
+    
+    ax.axis('off')
+    fig.subplots_adjust(left=0.02, right=0.98, top=0.95, bottom=0.05)
+    
+    return fig
+
+@app.route('/download_roughness_image', methods=['POST'])
+def download_roughness_image():
+    """Download roughness analysis image"""
+    global smoothed_image, detected_peaks, manual_peaks
+    
+    if smoothed_image is None:
+        return jsonify({'error': 'No smoothed image available'})
+    
+    try:
+        fig = create_roughness_analysis_figure()
+        if fig is None:
+            return jsonify({'error': 'No interfaces available for roughness analysis'})
+        
+        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
+        fig.savefig(temp_file.name, format='png', dpi=300, bbox_inches='tight')
+        plt.close(fig)
+        
+        return send_file(temp_file.name, as_attachment=True, download_name='interface_roughness_analysis.png')
+        
+    except Exception as e:
+        print(f"Error generating roughness image: {e}")
+        return jsonify({'error': f'Error generating roughness image: {str(e)}'})
+    
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5001)
