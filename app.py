@@ -846,44 +846,117 @@ def download_analysis_image():
         print(f"Error generating image: {e}")
         return jsonify({'error': str(e)})
 
-def calculate_interface_roughness(y_position, image_source, pixel_size, method='rms'):
+# def calculate_interface_roughness(y_position, image_source, pixel_size, method='rms'):
+#     """
+#     Calculate interface roughness from horizontal line profile
+    
+#     Args:
+#         y_position: Y coordinate of the interface
+#         image_source: 2D numpy array (smoothed or original image)
+#         pixel_size: Pixel size in nm
+#         method: Roughness calculation method ('rms', 'ra', 'rmax')
+    
+#     Returns:
+#         dict: Roughness values in pixels and nm
+#     """
+#     try:
+#         # Extract horizontal line profile at y_position
+#         if y_position < 0 or y_position >= image_source.shape[0]:
+#             return {'roughness_pixels': 0.0, 'roughness_nm': 0.0, 'valid': False}
+        
+#         profile = image_source[int(y_position), :]
+        
+#         # Calculate reference line (mean value)
+#         reference = np.mean(profile)
+        
+#         # Calculate deviations from reference
+#         deviations = profile - reference
+        
+#         # Calculate roughness based on method
+#         if method == 'rms':
+#             # Root Mean Square roughness
+#             roughness_pixels = np.sqrt(np.mean(deviations**2))
+#         elif method == 'ra':
+#             # Average roughness
+#             roughness_pixels = np.mean(np.abs(deviations))
+#         elif method == 'rmax':
+#             # Maximum peak-to-valley roughness
+#             roughness_pixels = np.max(profile) - np.min(profile)
+#         else:
+#             roughness_pixels = np.sqrt(np.mean(deviations**2))  # Default to RMS
+        
+#         # Convert to nanometers
+#         roughness_nm = roughness_pixels * pixel_size
+        
+#         return {
+#             'roughness_pixels': float(roughness_pixels),
+#             'roughness_nm': float(roughness_nm),
+#             'valid': True,
+#             'profile_points': len(profile),
+#             'reference_value': float(reference)
+#         }
+        
+#     except Exception as e:
+#         print(f"Error calculating roughness for interface at Y={y_position}: {e}")
+#         return {'roughness_pixels': 0.0, 'roughness_nm': 0.0, 'valid': False}
+
+def calculate_interface_roughness(y_position, image_source, pixel_size, method='rms', window_size=5):
     """
-    Calculate interface roughness from horizontal line profile
+    Calculate geometric interface roughness by tracking interface position variations
     
     Args:
-        y_position: Y coordinate of the interface
+        y_position: Nominal Y coordinate of the interface
         image_source: 2D numpy array (smoothed or original image)
         pixel_size: Pixel size in nm
         method: Roughness calculation method ('rms', 'ra', 'rmax')
+        window_size: Half-width of search window around nominal interface
     
     Returns:
         dict: Roughness values in pixels and nm
     """
     try:
-        # Extract horizontal line profile at y_position
-        if y_position < 0 or y_position >= image_source.shape[0]:
+        height, width = image_source.shape
+        y_pos = int(y_position)
+        
+        # Define search window around nominal interface
+        y_min = max(0, y_pos - window_size)
+        y_max = min(height - 1, y_pos + window_size)
+        
+        if y_max - y_min < 3:  # Need minimum window
             return {'roughness_pixels': 0.0, 'roughness_nm': 0.0, 'valid': False}
         
-        profile = image_source[int(y_position), :]
+        # Track actual interface position for each x coordinate
+        interface_positions = []
         
-        # Calculate reference line (mean value)
-        reference = np.mean(profile)
+        for x in range(width):
+            # Extract vertical profile at this x position
+            vertical_profile = image_source[y_min:y_max+1, x]
+            
+            # Find interface position using gradient method
+            # (You can also use edge detection, threshold, or other methods)
+            gradient = np.gradient(vertical_profile)
+            
+            # Find position of maximum absolute gradient (strongest edge)
+            edge_idx = np.argmax(np.abs(gradient))
+            actual_y_position = y_min + edge_idx
+            
+            # Store relative position from nominal interface
+            interface_positions.append(actual_y_position - y_pos)
         
-        # Calculate deviations from reference
-        deviations = profile - reference
+        interface_positions = np.array(interface_positions)
         
-        # Calculate roughness based on method
+        # Calculate geometric roughness
         if method == 'rms':
             # Root Mean Square roughness
-            roughness_pixels = np.sqrt(np.mean(deviations**2))
+            roughness_pixels = np.sqrt(np.mean(interface_positions**2))
         elif method == 'ra':
             # Average roughness
-            roughness_pixels = np.mean(np.abs(deviations))
+            roughness_pixels = np.mean(np.abs(interface_positions))
         elif method == 'rmax':
             # Maximum peak-to-valley roughness
-            roughness_pixels = np.max(profile) - np.min(profile)
+            roughness_pixels = np.max(interface_positions) - np.min(interface_positions)
         else:
-            roughness_pixels = np.sqrt(np.mean(deviations**2))  # Default to RMS
+            roughness_pixels = np.sqrt(np.mean(interface_positions**2))  # Default to RMS
         
         # Convert to nanometers
         roughness_nm = roughness_pixels * pixel_size
@@ -892,8 +965,10 @@ def calculate_interface_roughness(y_position, image_source, pixel_size, method='
             'roughness_pixels': float(roughness_pixels),
             'roughness_nm': float(roughness_nm),
             'valid': True,
-            'profile_points': len(profile),
-            'reference_value': float(reference)
+            'interface_positions': interface_positions.tolist(),
+            'mean_deviation': float(np.mean(interface_positions)),
+            'std_deviation': float(np.std(interface_positions)),
+            'measurement_points': len(interface_positions)
         }
         
     except Exception as e:
