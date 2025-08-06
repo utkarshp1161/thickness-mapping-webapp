@@ -900,7 +900,7 @@ def download_analysis_image():
 #         print(f"Error calculating roughness for interface at Y={y_position}: {e}")
 #         return {'roughness_pixels': 0.0, 'roughness_nm': 0.0, 'valid': False}
 
-def calculate_interface_roughness(y_position, image_source, pixel_size, method='rms', window_size=15):
+def calculate_interface_roughness(y_position, image_source, pixel_size, method='rms', window_size=10):
     """
     Calculate geometric interface roughness by tracking interface position variations
     
