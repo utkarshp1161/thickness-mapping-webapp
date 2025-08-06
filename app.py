@@ -991,6 +991,8 @@ def create_roughness_analysis_figure():
     colors = ['cyan', 'red', 'lime', 'magenta', 'yellow', 'orange', 'pink', 'lightblue']
     
     for i, y in enumerate(all_peaks):
+        if i in (0, 2):  # Skip plotting 1st and 3rd peaks
+            continue
         is_auto = detected_peaks is not None and y in detected_peaks
         base_color = 'cyan' if is_auto else 'red'
         trace_color = colors[i % len(colors)]
@@ -1044,16 +1046,16 @@ def create_roughness_analysis_figure():
                     ha='center', va='top',
                     bbox=dict(boxstyle='round,pad=0.2', facecolor='black', alpha=0.7))
     
-    # Add legend
-    legend_elements = []
-    if detected_peaks and len(detected_peaks) > 0:
-        legend_elements.append(plt.Line2D([0], [0], color='cyan', linestyle=':', linewidth=2, label='Auto Interfaces'))
-    if manual_peaks and len(manual_peaks) > 0:
-        legend_elements.append(plt.Line2D([0], [0], color='red', linestyle='--', linewidth=2, label='Manual Interfaces'))
-    legend_elements.append(plt.Line2D([0], [0], color='lime', linewidth=2, label='Actual Interface Trace'))
+    # # Add legend
+    # legend_elements = []
+    # if detected_peaks and len(detected_peaks) > 0:
+    #     legend_elements.append(plt.Line2D([0], [0], color='cyan', linestyle=':', linewidth=2, label='Auto Interfaces'))
+    # if manual_peaks and len(manual_peaks) > 0:
+    #     legend_elements.append(plt.Line2D([0], [0], color='red', linestyle='--', linewidth=2, label='Manual Interfaces'))
+    # legend_elements.append(plt.Line2D([0], [0], color='lime', linewidth=2, label='Actual Interface Trace'))
     
-    if legend_elements:# exclude 1st and 3rd
-        ax_main.legend(handles=legend_elements, loc='upper left', bbox_to_anchor=(0.02, 0.98), fontsize=9)
+    # if legend_elements:# exclude 1st and 3rd
+    #     ax_main.legend(handles=legend_elements, loc='upper left', bbox_to_anchor=(0.02, 0.98), fontsize=9)
     
     # if interface_roughness:
     #     all_roughness_nm = [data['roughness_nm'] for data in interface_roughness.values()]
