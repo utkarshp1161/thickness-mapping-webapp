@@ -991,41 +991,40 @@ def create_roughness_analysis_figure():
     colors = ['cyan', 'red', 'lime', 'magenta', 'yellow', 'orange', 'pink', 'lightblue']
     
     for i, y in enumerate(all_peaks):
-        if i != 0 or i!= 2:######--------------------> based on input from haixun and Burak -> no thickness of top layer and the layer close to mag layer
-            is_auto = detected_peaks is not None and y in detected_peaks
-            base_color = 'cyan' if is_auto else 'red'
-            trace_color = colors[i % len(colors)]
-            linestyle = ':' if is_auto else '--'
-            linewidth = 1.5 if is_auto else 2.5
-            
-            ax_main.axhline(y, color=base_color, linestyle=linestyle, linewidth=linewidth, alpha=0.6, label=f'Interface {i+1}')
-            
-            if y in interface_roughness and 'interface_positions' in interface_roughness[y]:
-                interface_positions = np.array(interface_roughness[y]['interface_positions'])
-                x_coords = np.arange(width)
-                actual_y_positions = y + interface_positions
-                
-                ax_main.plot(x_coords, actual_y_positions, color=trace_color, linewidth=2, alpha=0.8)
-                ax_main.fill_between(x_coords, y, actual_y_positions, alpha=0.2, color=trace_color)
-                
-                # --- Commented out roughness profile plot ---
-                # ax_rough.plot(interface_positions, x_coords, color=trace_color, linewidth=2, 
-                #              label=f'Y={int(y)} (R={interface_roughness[y]["roughness_nm"]:.2f}nm)')
-            
-            if y in interface_roughness:
-                roughness_nm = interface_roughness[y]['roughness_nm']
-                roughness_pixels = interface_roughness[y]['roughness_pixels']
-                
-                text_x = width * (0.02 if i % 2 == 0 else 0.98)
-                ha = 'left' if i % 2 == 0 else 'right'
-                roughness_text = f'R={roughness_nm:.3f}nm\n({roughness_pixels:.2f}px)'
-                
-                ax_main.text(text_x, y, roughness_text,
-                            color='white', fontsize=8, fontweight='bold',
-                            ha=ha, va='center',
-                            bbox=dict(boxstyle='round,pad=0.3', 
-                                    facecolor=trace_color, alpha=0.8, edgecolor='white'))
+        is_auto = detected_peaks is not None and y in detected_peaks
+        base_color = 'cyan' if is_auto else 'red'
+        trace_color = colors[i % len(colors)]
+        linestyle = ':' if is_auto else '--'
+        linewidth = 1.5 if is_auto else 2.5
         
+        ax_main.axhline(y, color=base_color, linestyle=linestyle, linewidth=linewidth, alpha=0.6, label=f'Interface {i+1}')
+        
+        if y in interface_roughness and 'interface_positions' in interface_roughness[y]:
+            interface_positions = np.array(interface_roughness[y]['interface_positions'])
+            x_coords = np.arange(width)
+            actual_y_positions = y + interface_positions
+            
+            ax_main.plot(x_coords, actual_y_positions, color=trace_color, linewidth=2, alpha=0.8)
+            ax_main.fill_between(x_coords, y, actual_y_positions, alpha=0.2, color=trace_color)
+            
+            # --- Commented out roughness profile plot ---
+            # ax_rough.plot(interface_positions, x_coords, color=trace_color, linewidth=2, 
+            #              label=f'Y={int(y)} (R={interface_roughness[y]["roughness_nm"]:.2f}nm)')
+        
+        if y in interface_roughness:
+            roughness_nm = interface_roughness[y]['roughness_nm']
+            roughness_pixels = interface_roughness[y]['roughness_pixels']
+            
+            text_x = width * (0.02 if i % 2 == 0 else 0.98)
+            ha = 'left' if i % 2 == 0 else 'right'
+            roughness_text = f'R={roughness_nm:.3f}nm\n({roughness_pixels:.2f}px)'
+            
+            ax_main.text(text_x, y, roughness_text,
+                        color='white', fontsize=8, fontweight='bold',
+                        ha=ha, va='center',
+                        bbox=dict(boxstyle='round,pad=0.3', 
+                                facecolor=trace_color, alpha=0.8, edgecolor='white'))
+    
 
     
     # Add scale bar
@@ -1053,9 +1052,11 @@ def create_roughness_analysis_figure():
         legend_elements.append(plt.Line2D([0], [0], color='red', linestyle='--', linewidth=2, label='Manual Interfaces'))
     legend_elements.append(plt.Line2D([0], [0], color='lime', linewidth=2, label='Actual Interface Trace'))
     
-    if legend_elements:
-        ax_main.legend(handles=legend_elements, loc='upper left', bbox_to_anchor=(0.02, 0.98), fontsize=9)
-    
+    if legend_elements:########--> skip 0th and 3rd interface as suggested by Huaixun and Burak
+        filtered_legend = [elem for i, elem in enumerate(legend_elements) if i not in (0, 2)]
+        if filtered_legend:
+            ax_main.legend(handles=filtered_legend, loc='upper left', bbox_to_anchor=(0.02, 0.98), fontsize=9)
+
     # if interface_roughness:
     #     all_roughness_nm = [data['roughness_nm'] for data in interface_roughness.values()]
     #     mean_roughness = np.mean(all_roughness_nm)
