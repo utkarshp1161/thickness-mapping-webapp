@@ -145,7 +145,7 @@ def index():
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
-    global loaded_images, pixel_size
+    global loaded_images, pixel_size, filename
     
     if 'file' not in request.files:
         return jsonify({'error': 'No file selected'})
@@ -656,6 +656,7 @@ def get_all_interfaces():
         'interfaces': all_interfaces,
         'total_count': len(all_interfaces)
     })
+
 @app.route('/download_csv', methods=['POST'])
 def download_csv():
     global detected_peaks, manual_peaks, pixel_size, current_image, smoothed_image
@@ -840,65 +841,17 @@ def download_analysis_image():
         plt.close(fig)
         
 
-        return send_file(temp_file.name, as_attachment=True, download_name='smoothed_with_annotations.png')
+        # return send_file(temp_file.name, as_attachment=True, download_name='smoothed_with_annotations.png')
+
+        basename = os.path.splitext(os.path.basename(filename))[0] if filename else "thickness"
+        download_name = f"thickness_{basename}.png"
+        return send_file(temp_file.name, as_attachment=True, download_name=download_name)
+
 
     except Exception as e:
         print(f"Error generating image: {e}")
         return jsonify({'error': str(e)})
 
-# def calculate_interface_roughness(y_position, image_source, pixel_size, method='rms'):
-#     """
-#     Calculate interface roughness from horizontal line profile
-    
-#     Args:
-#         y_position: Y coordinate of the interface
-#         image_source: 2D numpy array (smoothed or original image)
-#         pixel_size: Pixel size in nm
-#         method: Roughness calculation method ('rms', 'ra', 'rmax')
-    
-#     Returns:
-#         dict: Roughness values in pixels and nm
-#     """
-#     try:
-#         # Extract horizontal line profile at y_position
-#         if y_position < 0 or y_position >= image_source.shape[0]:
-#             return {'roughness_pixels': 0.0, 'roughness_nm': 0.0, 'valid': False}
-        
-#         profile = image_source[int(y_position), :]
-        
-#         # Calculate reference line (mean value)
-#         reference = np.mean(profile)
-        
-#         # Calculate deviations from reference
-#         deviations = profile - reference
-        
-#         # Calculate roughness based on method
-#         if method == 'rms':
-#             # Root Mean Square roughness
-#             roughness_pixels = np.sqrt(np.mean(deviations**2))
-#         elif method == 'ra':
-#             # Average roughness
-#             roughness_pixels = np.mean(np.abs(deviations))
-#         elif method == 'rmax':
-#             # Maximum peak-to-valley roughness
-#             roughness_pixels = np.max(profile) - np.min(profile)
-#         else:
-#             roughness_pixels = np.sqrt(np.mean(deviations**2))  # Default to RMS
-        
-#         # Convert to nanometers
-#         roughness_nm = roughness_pixels * pixel_size
-        
-#         return {
-#             'roughness_pixels': float(roughness_pixels),
-#             'roughness_nm': float(roughness_nm),
-#             'valid': True,
-#             'profile_points': len(profile),
-#             'reference_value': float(reference)
-#         }
-        
-#     except Exception as e:
-#         print(f"Error calculating roughness for interface at Y={y_position}: {e}")
-#         return {'roughness_pixels': 0.0, 'roughness_nm': 0.0, 'valid': False}
 
 def calculate_interface_roughness(y_position, image_source, pixel_size, method='rms', window_size=15, all_interfaces=None):
     """
@@ -1038,63 +991,42 @@ def create_roughness_analysis_figure():
     colors = ['cyan', 'red', 'lime', 'magenta', 'yellow', 'orange', 'pink', 'lightblue']
     
     for i, y in enumerate(all_peaks):
-        is_auto = detected_peaks is not None and y in detected_peaks
-        base_color = 'cyan' if is_auto else 'red'
-        trace_color = colors[i % len(colors)]
-        linestyle = ':' if is_auto else '--'
-        linewidth = 1.5 if is_auto else 2.5
+        if i != 0 or i!= 2:######--------------------> based on input from haixun and Burak -> no thickness of top layer and the layer close to mag layer
+            is_auto = detected_peaks is not None and y in detected_peaks
+            base_color = 'cyan' if is_auto else 'red'
+            trace_color = colors[i % len(colors)]
+            linestyle = ':' if is_auto else '--'
+            linewidth = 1.5 if is_auto else 2.5
+            
+            ax_main.axhline(y, color=base_color, linestyle=linestyle, linewidth=linewidth, alpha=0.6, label=f'Interface {i+1}')
+            
+            if y in interface_roughness and 'interface_positions' in interface_roughness[y]:
+                interface_positions = np.array(interface_roughness[y]['interface_positions'])
+                x_coords = np.arange(width)
+                actual_y_positions = y + interface_positions
+                
+                ax_main.plot(x_coords, actual_y_positions, color=trace_color, linewidth=2, alpha=0.8)
+                ax_main.fill_between(x_coords, y, actual_y_positions, alpha=0.2, color=trace_color)
+                
+                # --- Commented out roughness profile plot ---
+                # ax_rough.plot(interface_positions, x_coords, color=trace_color, linewidth=2, 
+                #              label=f'Y={int(y)} (R={interface_roughness[y]["roughness_nm"]:.2f}nm)')
+            
+            if y in interface_roughness:
+                roughness_nm = interface_roughness[y]['roughness_nm']
+                roughness_pixels = interface_roughness[y]['roughness_pixels']
+                
+                text_x = width * (0.02 if i % 2 == 0 else 0.98)
+                ha = 'left' if i % 2 == 0 else 'right'
+                roughness_text = f'R={roughness_nm:.3f}nm\n({roughness_pixels:.2f}px)'
+                
+                ax_main.text(text_x, y, roughness_text,
+                            color='white', fontsize=8, fontweight='bold',
+                            ha=ha, va='center',
+                            bbox=dict(boxstyle='round,pad=0.3', 
+                                    facecolor=trace_color, alpha=0.8, edgecolor='white'))
         
-        ax_main.axhline(y, color=base_color, linestyle=linestyle, linewidth=linewidth, alpha=0.6, label=f'Interface {i+1}')
-        
-        if y in interface_roughness and 'interface_positions' in interface_roughness[y]:
-            interface_positions = np.array(interface_roughness[y]['interface_positions'])
-            x_coords = np.arange(width)
-            actual_y_positions = y + interface_positions
-            
-            ax_main.plot(x_coords, actual_y_positions, color=trace_color, linewidth=2, alpha=0.8)
-            ax_main.fill_between(x_coords, y, actual_y_positions, alpha=0.2, color=trace_color)
-            
-            # --- Commented out roughness profile plot ---
-            # ax_rough.plot(interface_positions, x_coords, color=trace_color, linewidth=2, 
-            #              label=f'Y={int(y)} (R={interface_roughness[y]["roughness_nm"]:.2f}nm)')
-        
-        if y in interface_roughness:
-            roughness_nm = interface_roughness[y]['roughness_nm']
-            roughness_pixels = interface_roughness[y]['roughness_pixels']
-            
-            text_x = width * (0.02 if i % 2 == 0 else 0.98)
-            ha = 'left' if i % 2 == 0 else 'right'
-            roughness_text = f'R={roughness_nm:.3f}nm\n({roughness_pixels:.2f}px)'
-            
-            ax_main.text(text_x, y, roughness_text,
-                        color='white', fontsize=8, fontweight='bold',
-                        ha=ha, va='center',
-                        bbox=dict(boxstyle='round,pad=0.3', 
-                                facecolor=trace_color, alpha=0.8, edgecolor='white'))
-    
-    # --- Commented out entire roughness profile subplot setup ---
-    # if interface_roughness:
-    #     ax_rough.set_xlabel('Interface Deviation (pixels)', fontsize=10)
-    #     ax_rough.set_ylabel('X Position (pixels)', fontsize=10)
-    #     ax_rough.set_title('Roughness Profiles', fontsize=12, fontweight='bold')
-    #     ax_rough.grid(True, alpha=0.3)
-    #     ax_rough.legend(fontsize=8, loc='upper right')
-    #     ax_rough.axvline(x=0, color='black', linestyle='--', alpha=0.5, linewidth=1)
-    #     ax_rough.set_ylim(0, width)
-    #     ax_rough.invert_yaxis()
-    #     all_deviations = []
-    #     for roughness_data in interface_roughness.values():
-    #         if 'interface_positions' in roughness_data:
-    #             all_deviations.extend(roughness_data['interface_positions'])
-    #     if all_deviations:
-    #         max_dev = max(abs(min(all_deviations)), abs(max(all_deviations)))
-    #         ax_rough.set_xlim(-max_dev * 1.2, max_dev * 1.2)
-    # else:
-    #     ax_rough.text(0.5, 0.5, 'No Valid\nRoughness Data', 
-    #                  transform=ax_rough.transAxes, ha='center', va='center',
-    #                  fontsize=12, alpha=0.5)
-    #     ax_rough.set_xticks([])
-    #     ax_rough.set_yticks([])
+
     
     # Add scale bar
     if pixel_size:
@@ -1164,7 +1096,9 @@ def download_roughness_image():
         fig.savefig(temp_file.name, format='png', dpi=300, bbox_inches='tight')
         plt.close(fig)
         
-        return send_file(temp_file.name, as_attachment=True, download_name='interface_roughness_analysis.png')
+        basename = os.path.splitext(os.path.basename(filename))[0] if filename else "roughness"
+        download_name = f"roughness_{basename}.png"
+        return send_file(temp_file.name, as_attachment=True, download_name=download_name)
         
     except Exception as e:
         print(f"Error generating roughness image: {e}")
