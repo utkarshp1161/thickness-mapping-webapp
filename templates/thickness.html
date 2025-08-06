@@ -990,23 +990,31 @@
         // Download Analysis Image
         document.getElementById('downloadAnalysisBtn').addEventListener('click', function() {
             showInfo('interfaceManagementStatus', 'Generating analysis image...');
-            
+
             fetch('/download_analysis_image', {
                 method: 'POST'
             })
             .then(response => {
-                if (response.ok) {
-                    return response.blob();
+                if (!response.ok) {
+                    return response.json().then(data => {
+                        throw new Error(data.error || 'Unknown error');
+                    });
                 }
-                return response.json().then(data => {
-                    throw new Error(data.error || 'Unknown error');
-                });
+
+                // Extract filename from Content-Disposition
+                const disposition = response.headers.get('Content-Disposition');
+                let filename = 'analysis_with_interfaces.png';
+                if (disposition && disposition.includes('filename=')) {
+                    filename = disposition.split('filename=')[1].replaceAll('"', '').trim();
+                }
+
+                return response.blob().then(blob => ({ blob, filename }));
             })
-            .then(blob => {
+            .then(({ blob, filename }) => {
                 const url = window.URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = 'analysis_with_interfaces.png';
+                a.download = filename;
                 document.body.appendChild(a);
                 a.click();
                 window.URL.revokeObjectURL(url);
@@ -1021,23 +1029,31 @@
         // Download Roughness Image
         document.getElementById('downloadRoughnessBtn').addEventListener('click', function() {
             showInfo('interfaceManagementStatus', 'Generating roughness analysis image...');
-            
+
             fetch('/download_roughness_image', {
                 method: 'POST'
             })
             .then(response => {
-                if (response.ok) {
-                    return response.blob();
+                if (!response.ok) {
+                    return response.json().then(data => {
+                        throw new Error(data.error || 'Unknown error');
+                    });
                 }
-                return response.json().then(data => {
-                    throw new Error(data.error || 'Unknown error');
-                });
+
+                // Extract filename from Content-Disposition
+                const disposition = response.headers.get('Content-Disposition');
+                let filename = 'interface_roughness_analysis.png';
+                if (disposition && disposition.includes('filename=')) {
+                    filename = disposition.split('filename=')[1].replaceAll('"', '').trim();
+                }
+
+                return response.blob().then(blob => ({ blob, filename }));
             })
-            .then(blob => {
+            .then(({ blob, filename }) => {
                 const url = window.URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = 'interface_roughness_analysis.png';
+                a.download = filename;
                 document.body.appendChild(a);
                 a.click();
                 window.URL.revokeObjectURL(url);
@@ -1048,6 +1064,7 @@
                 showError('interfaceManagementStatus', 'Error downloading roughness image: ' + error.message);
             });
         });
+
         
         // Initialize event handlers when page loads
         document.addEventListener('DOMContentLoaded', function() {
