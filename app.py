@@ -971,10 +971,9 @@ def create_roughness_analysis_figure():
     # Calculate roughness for each interface
     interface_roughness = {}
     for i, y in enumerate(all_peaks):
-        if i !=0 or i!=2:
-            roughness_data = calculate_interface_roughness(y, smoothed_image, pixel_size)
-            if roughness_data['valid']:
-                interface_roughness[y] = roughness_data
+        roughness_data = calculate_interface_roughness(y, smoothed_image, pixel_size)
+        if roughness_data['valid']:
+            interface_roughness[y] = roughness_data
     
     height, width = smoothed_image.shape
     aspect_ratio = width / height
