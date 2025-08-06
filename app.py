@@ -534,7 +534,7 @@ def calculate_thickness():
         interface_roughness = {}
         if image_source is not None:
             for y in all_peaks:
-                roughness_data = calculate_interface_roughness(y, image_source, pixel_size)
+                roughness_data = calculate_interface_roughness(y, image_source, pixel_size, all_interfaces=all_peaks)
                 if roughness_data['valid']:
                     interface_roughness[int(y)] = roughness_data
         
@@ -900,7 +900,7 @@ def download_analysis_image():
 #         print(f"Error calculating roughness for interface at Y={y_position}: {e}")
 #         return {'roughness_pixels': 0.0, 'roughness_nm': 0.0, 'valid': False}
 
-def calculate_interface_roughness(y_position, image_source, pixel_size, method='rms', window_size=15):
+def calculate_interface_roughness(y_position, image_source, pixel_size, method='rms', window_size=15, all_interfaces=None):
     """
     Calculate geometric interface roughness by tracking interface position variations
     
@@ -910,6 +910,7 @@ def calculate_interface_roughness(y_position, image_source, pixel_size, method='
         pixel_size: Pixel size in nm
         method: Roughness calculation method ('rms', 'ra', 'rmax')
         window_size: Half-width of search window around nominal interface
+        all_interfaces: List of all interface positions to avoid overlap
     
     Returns:
         dict: Roughness values in pixels and nm
@@ -918,9 +919,32 @@ def calculate_interface_roughness(y_position, image_source, pixel_size, method='
         height, width = image_source.shape
         y_pos = int(y_position)
         
+        # Adaptive window size based on adjacent interfaces
+        adaptive_window = window_size
+        if all_interfaces is not None:
+            interfaces = sorted([int(i) for i in all_interfaces])
+            current_idx = None
+            
+            # Find current interface in the list
+            for i, interface_y in enumerate(interfaces):
+                if interface_y == y_pos:
+                    current_idx = i
+                    break
+            
+            if current_idx is not None:
+                # Check distance to previous interface
+                if current_idx > 0:
+                    prev_distance = y_pos - interfaces[current_idx - 1]
+                    adaptive_window = min(adaptive_window, max(3, prev_distance // 2))
+                
+                # Check distance to next interface
+                if current_idx < len(interfaces) - 1:
+                    next_distance = interfaces[current_idx + 1] - y_pos
+                    adaptive_window = min(adaptive_window, max(3, next_distance // 2))
+        
         # Define search window around nominal interface
-        y_min = max(0, y_pos - window_size)
-        y_max = min(height - 1, y_pos + window_size)
+        y_min = max(0, y_pos - adaptive_window)
+        y_max = min(height - 1, y_pos + adaptive_window)
         
         if y_max - y_min < 3:  # Need minimum window
             return {'roughness_pixels': 0.0, 'roughness_nm': 0.0, 'valid': False}
@@ -968,13 +992,14 @@ def calculate_interface_roughness(y_position, image_source, pixel_size, method='
             'interface_positions': interface_positions.tolist(),
             'mean_deviation': float(np.mean(interface_positions)),
             'std_deviation': float(np.std(interface_positions)),
-            'measurement_points': len(interface_positions)
+            'measurement_points': len(interface_positions),
+            'used_window_size': int(adaptive_window)  # Added for debugging
         }
         
     except Exception as e:
         print(f"Error calculating roughness for interface at Y={y_position}: {e}")
         return {'roughness_pixels': 0.0, 'roughness_nm': 0.0, 'valid': False}
-
+    
 def create_roughness_analysis_figure():
     """Create figure showing smoothed image with roughness annotations and visual roughness traces"""
     global smoothed_image, detected_peaks, manual_peaks, pixel_size
