@@ -1099,23 +1099,23 @@ def create_roughness_analysis_figure():
     if legend_elements:
         ax_main.legend(handles=legend_elements, loc='upper left', bbox_to_anchor=(0.02, 0.98), fontsize=9)
     
-    if interface_roughness:
-        all_roughness_nm = [data['roughness_nm'] for data in interface_roughness.values()]
-        mean_roughness = np.mean(all_roughness_nm)
-        std_roughness = np.std(all_roughness_nm)
-        min_roughness = np.min(all_roughness_nm)
-        max_roughness = np.max(all_roughness_nm)
+    # if interface_roughness:
+    #     all_roughness_nm = [data['roughness_nm'] for data in interface_roughness.values()]
+    #     mean_roughness = np.mean(all_roughness_nm)
+    #     std_roughness = np.std(all_roughness_nm)
+    #     min_roughness = np.min(all_roughness_nm)
+    #     max_roughness = np.max(all_roughness_nm)
         
-        stats_text = f'ROUGHNESS STATISTICS\n' \
-                    f'Mean: {mean_roughness:.3f} ± {std_roughness:.3f} nm\n' \
-                    f'Range: {min_roughness:.3f} - {max_roughness:.3f} nm\n' \
-                    f'Interfaces: {len(interface_roughness)}'
+    #     stats_text = f'ROUGHNESS STATISTICS\n' \
+    #                 f'Mean: {mean_roughness:.3f} ± {std_roughness:.3f} nm\n' \
+    #                 f'Range: {min_roughness:.3f} - {max_roughness:.3f} nm\n' \
+    #                 f'Interfaces: {len(interface_roughness)}'
         
-        ax_main.text(0.02, 0.02, stats_text,
-                    transform=ax_main.transAxes,
-                    fontsize=9, fontweight='bold',
-                    verticalalignment='bottom',
-                    bbox=dict(boxstyle='round,pad=0.5', facecolor='white', alpha=0.8))
+    #     ax_main.text(0.02, 0.02, stats_text,
+    #                 transform=ax_main.transAxes,
+    #                 fontsize=9, fontweight='bold',
+    #                 verticalalignment='bottom',
+    #                 bbox=dict(boxstyle='round,pad=0.5', facecolor='white', alpha=0.8))
     
     ax_main.axis('off')
     
