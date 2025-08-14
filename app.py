@@ -853,7 +853,7 @@ def download_analysis_image():
         return jsonify({'error': str(e)})
 
 
-def calculate_interface_roughness(y_position, image_source, pixel_size, method='rms', window_size=15, all_interfaces=None):
+def calculate_interface_roughness(y_position, image_source, pixel_size, method='rms', window_size=25, all_interfaces=None):
     """
     Calculate geometric interface roughness by tracking interface position variations
     
