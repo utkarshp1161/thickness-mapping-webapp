@@ -855,7 +855,7 @@ def download_analysis_image():
 
 def calculate_interface_roughness(y_position, image_source, pixel_size, method='rms', window_size=15, all_interfaces=None):
     """
-    Calculate geometric interface roughness by tracking interface position variations
+    Calculate geometric interface roughness with smoothed interface tracking
     
     Args:
         y_position: Nominal Y coordinate of the interface
@@ -905,77 +905,94 @@ def calculate_interface_roughness(y_position, image_source, pixel_size, method='
         # Track actual interface position for each x coordinate
         interface_positions = []
         
+        # ========== NEW: IMPROVED INTERFACE TRACKING ==========
+        
+        # Step 1: Initial rough detection with continuity constraint
         for x in range(width):
-            # Extract vertical profile at this x position
             vertical_profile = image_source[y_min:y_max+1, x]
+            gradient = np.gradient(vertical_profile)
             
-            # Apply smoothing to the vertical profile to reduce noise
-            if len(vertical_profile) > 3:
-                # Use a small gaussian filter for smoothing
-                from scipy.ndimage import gaussian_filter1d
-                smoothed_profile = gaussian_filter1d(vertical_profile, sigma=0.5)
+            if x == 0:
+                # First column: use strongest gradient
+                edge_idx = np.argmax(np.abs(gradient))
             else:
-                smoothed_profile = vertical_profile
+                # Subsequent columns: prefer positions close to previous detection
+                prev_position = interface_positions[-1] + y_pos  # Convert back to absolute
+                prev_relative = prev_position - y_min  # Relative to current window
+                
+                # Find all significant gradients
+                grad_threshold = 0.3 * np.max(np.abs(gradient))
+                significant_edges = np.where(np.abs(gradient) > grad_threshold)[0]
+                
+                if len(significant_edges) > 0:
+                    # Choose edge closest to previous position
+                    distances = np.abs(significant_edges - prev_relative)
+                    closest_idx = np.argmin(distances)
+                    edge_idx = significant_edges[closest_idx]
+                else:
+                    # Fallback to strongest gradient
+                    edge_idx = np.argmax(np.abs(gradient))
             
-            # Find interface position using gradient method
-            gradient = np.gradient(smoothed_profile)
-            
-            # Find position of maximum absolute gradient (strongest edge)
-            edge_idx = np.argmax(np.abs(gradient))
             actual_y_position = y_min + edge_idx
-            
-            # Store relative position from nominal interface
             interface_positions.append(actual_y_position - y_pos)
         
         interface_positions = np.array(interface_positions)
         
-        # Apply smoothing to interface positions to reduce sudden jumps
-        # Method 1: Moving average filter
-        def moving_average(data, window):
-            if len(data) < window:
-                return data
-            padded_data = np.pad(data, (window//2, window//2), mode='edge')
-            smoothed = np.convolve(padded_data, np.ones(window)/window, mode='valid')
-            return smoothed
-        
-        # Method 2: Median filter to remove outliers first
-        from scipy.signal import medfilt
-        if len(interface_positions) > 3:
-            # Remove outliers with median filter
-            filtered_positions = medfilt(interface_positions, kernel_size=min(5, len(interface_positions)))
+        # Step 2: Apply smoothing to reduce sudden jumps
+        # Using a moving average filter
+        smoothing_window = min(7, len(interface_positions) // 4)  # Adaptive smoothing window
+        if smoothing_window >= 3:
+            from scipy import ndimage
+            # Apply median filter first to remove outliers
+            interface_positions = ndimage.median_filter(interface_positions, size=3)
             
-            # Apply moving average for smoothness
-            smooth_window = min(7, len(interface_positions)//3)
-            if smooth_window >= 3:
-                smoothed_positions = moving_average(filtered_positions, smooth_window)
-            else:
-                smoothed_positions = filtered_positions
-        else:
-            smoothed_positions = interface_positions
+            # Then apply gaussian smoothing for continuity
+            sigma = smoothing_window / 3.0  # Convert window to sigma
+            interface_positions = ndimage.gaussian_filter1d(interface_positions, sigma=sigma)
         
-        # Alternative: Use Savitzky-Golay filter for better smoothing
-        # from scipy.signal import savgol_filter
-        # if len(interface_positions) > 5:
-        #     window_length = min(7, len(interface_positions) if len(interface_positions) % 2 == 1 else len(interface_positions)-1)
-        #     smoothed_positions = savgol_filter(interface_positions, window_length, 2)
-        # else:
-        #     smoothed_positions = interface_positions
+        # Step 3: Remove remaining outliers (optional, for very noisy interfaces)
+        # Use IQR method to identify and smooth outliers
+        q75, q25 = np.percentile(interface_positions, [75, 25])
+        iqr = q75 - q25
+        outlier_threshold = 1.5 * iqr
         
-        # Use smoothed positions for roughness calculation
-        final_positions = smoothed_positions
+        outliers = np.abs(interface_positions - np.median(interface_positions)) > outlier_threshold
+        if np.any(outliers) and np.sum(~outliers) > len(interface_positions) // 2:
+            # Replace outliers with interpolated values
+            valid_indices = np.where(~outliers)[0]
+            outlier_indices = np.where(outliers)[0]
+            
+            for idx in outlier_indices:
+                # Find nearest valid points
+                distances = np.abs(valid_indices - idx)
+                nearest_valid = valid_indices[np.argsort(distances)[:2]]
+                
+                if len(nearest_valid) >= 2:
+                    # Linear interpolation between nearest valid points
+                    x1, x2 = nearest_valid[0], nearest_valid[1]
+                    y1, y2 = interface_positions[x1], interface_positions[x2]
+                    
+                    # Interpolate
+                    if x2 != x1:
+                        interface_positions[idx] = y1 + (y2 - y1) * (idx - x1) / (x2 - x1)
+                else:
+                    # Use median if not enough valid points
+                    interface_positions[idx] = np.median(interface_positions[~outliers])
+        
+        # ========== END OF IMPROVEMENTS ==========
         
         # Calculate geometric roughness
         if method == 'rms':
             # Root Mean Square roughness
-            roughness_pixels = np.sqrt(np.mean(final_positions**2))
+            roughness_pixels = np.sqrt(np.mean(interface_positions**2))
         elif method == 'ra':
             # Average roughness
-            roughness_pixels = np.mean(np.abs(final_positions))
+            roughness_pixels = np.mean(np.abs(interface_positions))
         elif method == 'rmax':
             # Maximum peak-to-valley roughness
-            roughness_pixels = np.max(final_positions) - np.min(final_positions)
+            roughness_pixels = np.max(interface_positions) - np.min(interface_positions)
         else:
-            roughness_pixels = np.sqrt(np.mean(final_positions**2))  # Default to RMS
+            roughness_pixels = np.sqrt(np.mean(interface_positions**2))  # Default to RMS
         
         # Convert to nanometers
         roughness_nm = roughness_pixels * pixel_size
@@ -984,12 +1001,12 @@ def calculate_interface_roughness(y_position, image_source, pixel_size, method='
             'roughness_pixels': float(roughness_pixels),
             'roughness_nm': float(roughness_nm),
             'valid': True,
-            'interface_positions': final_positions.tolist(),
-            'interface_positions_raw': interface_positions.tolist(),  # Keep raw for comparison
-            'mean_deviation': float(np.mean(final_positions)),
-            'std_deviation': float(np.std(final_positions)),
-            'measurement_points': len(final_positions),
-            'used_window_size': int(adaptive_window)
+            'interface_positions': interface_positions.tolist(),
+            'mean_deviation': float(np.mean(interface_positions)),
+            'std_deviation': float(np.std(interface_positions)),
+            'measurement_points': len(interface_positions),
+            'used_window_size': int(adaptive_window),
+            'outliers_detected': int(np.sum(outliers)) if 'outliers' in locals() else 0  # Added for debugging
         }
         
     except Exception as e:
