@@ -968,10 +968,12 @@ def create_roughness_analysis_figure():
     if len(all_peaks) == 0:
         return None
     
-    # Calculate roughness for each interface
+    # Calculate roughness for each interface with smoothing
     interface_roughness = {}
     for i, y in enumerate(all_peaks):
-        roughness_data = calculate_interface_roughness(y, smoothed_image, pixel_size)
+        # Apply Gaussian smoothing with sigma=2.0 to reduce fluctuations
+        roughness_data = calculate_interface_roughness(y, smoothed_image, pixel_size, 
+                                                     smoothing='gaussian', smoothing_sigma=2.0)
         if roughness_data['valid']:
             interface_roughness[y] = roughness_data
     
@@ -982,7 +984,7 @@ def create_roughness_analysis_figure():
     
     # Create subplots: only the main image
     fig = plt.figure(figsize=(fig_width, fig_height))
-    ax_main = plt.subplot2grid((1, 1), (0, 0))  # Removed ax_rough subplot
+    ax_main = plt.subplot2grid((1, 1), (0, 0))
     
     # Display smoothed image
     ax_main.imshow(smoothed_image, cmap='gray', aspect='equal', origin="upper")
@@ -1008,10 +1010,6 @@ def create_roughness_analysis_figure():
             
             ax_main.plot(x_coords, actual_y_positions, color=trace_color, linewidth=2, alpha=0.8)
             ax_main.fill_between(x_coords, y, actual_y_positions, alpha=0.2, color=trace_color)
-            
-            # --- Commented out roughness profile plot ---
-            # ax_rough.plot(interface_positions, x_coords, color=trace_color, linewidth=2, 
-            #              label=f'Y={int(y)} (R={interface_roughness[y]["roughness_nm"]:.2f}nm)')
         
         if y in interface_roughness:
             roughness_nm = interface_roughness[y]['roughness_nm']
@@ -1021,13 +1019,12 @@ def create_roughness_analysis_figure():
             ha = 'left' if i % 2 == 0 else 'right'
             roughness_text = f'R={roughness_nm:.3f}nm\n({roughness_pixels:.2f}px)'
             
+            # Increased font size from 8 to 10 to match thickness plot
             ax_main.text(text_x, y, roughness_text,
-                        color='white', fontsize=8, fontweight='bold',
+                        color='white', fontsize=10, fontweight='bold',  # Changed from 8 to 10
                         ha=ha, va='center',
-                        bbox=dict(boxstyle='round,pad=0.3', 
+                        bbox=dict(boxstyle='round,pad=0.3',  # Slightly larger padding
                                 facecolor=trace_color, alpha=0.8, edgecolor='white'))
-    
-
     
     # Add scale bar
     if pixel_size:
@@ -1045,35 +1042,6 @@ def create_roughness_analysis_figure():
                     color='white', fontsize=10, fontweight='bold',
                     ha='center', va='top',
                     bbox=dict(boxstyle='round,pad=0.2', facecolor='black', alpha=0.7))
-    
-    # # Add legend
-    # legend_elements = []
-    # if detected_peaks and len(detected_peaks) > 0:
-    #     legend_elements.append(plt.Line2D([0], [0], color='cyan', linestyle=':', linewidth=2, label='Auto Interfaces'))
-    # if manual_peaks and len(manual_peaks) > 0:
-    #     legend_elements.append(plt.Line2D([0], [0], color='red', linestyle='--', linewidth=2, label='Manual Interfaces'))
-    # legend_elements.append(plt.Line2D([0], [0], color='lime', linewidth=2, label='Actual Interface Trace'))
-    
-    # if legend_elements:# exclude 1st and 3rd
-    #     ax_main.legend(handles=legend_elements, loc='upper left', bbox_to_anchor=(0.02, 0.98), fontsize=9)
-    
-    # if interface_roughness:
-    #     all_roughness_nm = [data['roughness_nm'] for data in interface_roughness.values()]
-    #     mean_roughness = np.mean(all_roughness_nm)
-    #     std_roughness = np.std(all_roughness_nm)
-    #     min_roughness = np.min(all_roughness_nm)
-    #     max_roughness = np.max(all_roughness_nm)
-        
-    #     stats_text = f'ROUGHNESS STATISTICS\n' \
-    #                 f'Mean: {mean_roughness:.3f} ± {std_roughness:.3f} nm\n' \
-    #                 f'Range: {min_roughness:.3f} - {max_roughness:.3f} nm\n' \
-    #                 f'Interfaces: {len(interface_roughness)}'
-        
-    #     ax_main.text(0.02, 0.02, stats_text,
-    #                 transform=ax_main.transAxes,
-    #                 fontsize=9, fontweight='bold',
-    #                 verticalalignment='bottom',
-    #                 bbox=dict(boxstyle='round,pad=0.5', facecolor='white', alpha=0.8))
     
     ax_main.axis('off')
     
