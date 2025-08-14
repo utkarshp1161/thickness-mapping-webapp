@@ -909,9 +909,16 @@ def calculate_interface_roughness(y_position, image_source, pixel_size, method='
             # Extract vertical profile at this x position
             vertical_profile = image_source[y_min:y_max+1, x]
             
+            # Apply smoothing to the vertical profile to reduce noise
+            if len(vertical_profile) > 3:
+                # Use a small gaussian filter for smoothing
+                from scipy.ndimage import gaussian_filter1d
+                smoothed_profile = gaussian_filter1d(vertical_profile, sigma=0.5)
+            else:
+                smoothed_profile = vertical_profile
+            
             # Find interface position using gradient method
-            # (You can also use edge detection, threshold, or other methods)
-            gradient = np.gradient(vertical_profile)
+            gradient = np.gradient(smoothed_profile)
             
             # Find position of maximum absolute gradient (strongest edge)
             edge_idx = np.argmax(np.abs(gradient))
@@ -922,18 +929,53 @@ def calculate_interface_roughness(y_position, image_source, pixel_size, method='
         
         interface_positions = np.array(interface_positions)
         
+        # Apply smoothing to interface positions to reduce sudden jumps
+        # Method 1: Moving average filter
+        def moving_average(data, window):
+            if len(data) < window:
+                return data
+            padded_data = np.pad(data, (window//2, window//2), mode='edge')
+            smoothed = np.convolve(padded_data, np.ones(window)/window, mode='valid')
+            return smoothed
+        
+        # Method 2: Median filter to remove outliers first
+        from scipy.signal import medfilt
+        if len(interface_positions) > 3:
+            # Remove outliers with median filter
+            filtered_positions = medfilt(interface_positions, kernel_size=min(5, len(interface_positions)))
+            
+            # Apply moving average for smoothness
+            smooth_window = min(7, len(interface_positions)//3)
+            if smooth_window >= 3:
+                smoothed_positions = moving_average(filtered_positions, smooth_window)
+            else:
+                smoothed_positions = filtered_positions
+        else:
+            smoothed_positions = interface_positions
+        
+        # Alternative: Use Savitzky-Golay filter for better smoothing
+        # from scipy.signal import savgol_filter
+        # if len(interface_positions) > 5:
+        #     window_length = min(7, len(interface_positions) if len(interface_positions) % 2 == 1 else len(interface_positions)-1)
+        #     smoothed_positions = savgol_filter(interface_positions, window_length, 2)
+        # else:
+        #     smoothed_positions = interface_positions
+        
+        # Use smoothed positions for roughness calculation
+        final_positions = smoothed_positions
+        
         # Calculate geometric roughness
         if method == 'rms':
             # Root Mean Square roughness
-            roughness_pixels = np.sqrt(np.mean(interface_positions**2))
+            roughness_pixels = np.sqrt(np.mean(final_positions**2))
         elif method == 'ra':
             # Average roughness
-            roughness_pixels = np.mean(np.abs(interface_positions))
+            roughness_pixels = np.mean(np.abs(final_positions))
         elif method == 'rmax':
             # Maximum peak-to-valley roughness
-            roughness_pixels = np.max(interface_positions) - np.min(interface_positions)
+            roughness_pixels = np.max(final_positions) - np.min(final_positions)
         else:
-            roughness_pixels = np.sqrt(np.mean(interface_positions**2))  # Default to RMS
+            roughness_pixels = np.sqrt(np.mean(final_positions**2))  # Default to RMS
         
         # Convert to nanometers
         roughness_nm = roughness_pixels * pixel_size
@@ -942,11 +984,12 @@ def calculate_interface_roughness(y_position, image_source, pixel_size, method='
             'roughness_pixels': float(roughness_pixels),
             'roughness_nm': float(roughness_nm),
             'valid': True,
-            'interface_positions': interface_positions.tolist(),
-            'mean_deviation': float(np.mean(interface_positions)),
-            'std_deviation': float(np.std(interface_positions)),
-            'measurement_points': len(interface_positions),
-            'used_window_size': int(adaptive_window)  # Added for debugging
+            'interface_positions': final_positions.tolist(),
+            'interface_positions_raw': interface_positions.tolist(),  # Keep raw for comparison
+            'mean_deviation': float(np.mean(final_positions)),
+            'std_deviation': float(np.std(final_positions)),
+            'measurement_points': len(final_positions),
+            'used_window_size': int(adaptive_window)
         }
         
     except Exception as e:
@@ -1009,10 +1052,7 @@ def create_roughness_analysis_figure():
             ax_main.plot(x_coords, actual_y_positions, color=trace_color, linewidth=2, alpha=0.8)
             ax_main.fill_between(x_coords, y, actual_y_positions, alpha=0.2, color=trace_color)
             
-            # --- Commented out roughness profile plot ---
-            # ax_rough.plot(interface_positions, x_coords, color=trace_color, linewidth=2, 
-            #              label=f'Y={int(y)} (R={interface_roughness[y]["roughness_nm"]:.2f}nm)')
-        
+
         if y in interface_roughness:
             roughness_nm = interface_roughness[y]['roughness_nm']
             roughness_pixels = interface_roughness[y]['roughness_pixels']
