@@ -968,12 +968,10 @@ def create_roughness_analysis_figure():
     if len(all_peaks) == 0:
         return None
     
-    # Calculate roughness for each interface with smoothing
+    # Calculate roughness for each interface
     interface_roughness = {}
     for i, y in enumerate(all_peaks):
-        # Apply Gaussian smoothing with sigma=2.0 to reduce fluctuations
-        roughness_data = calculate_interface_roughness(y, smoothed_image, pixel_size, 
-                                                     smoothing='gaussian', smoothing_sigma=2.0)
+        roughness_data = calculate_interface_roughness(y, smoothed_image, pixel_size)
         if roughness_data['valid']:
             interface_roughness[y] = roughness_data
     
@@ -984,7 +982,7 @@ def create_roughness_analysis_figure():
     
     # Create subplots: only the main image
     fig = plt.figure(figsize=(fig_width, fig_height))
-    ax_main = plt.subplot2grid((1, 1), (0, 0))
+    ax_main = plt.subplot2grid((1, 1), (0, 0))  # Removed ax_rough subplot
     
     # Display smoothed image
     ax_main.imshow(smoothed_image, cmap='gray', aspect='equal', origin="upper")
@@ -1010,6 +1008,10 @@ def create_roughness_analysis_figure():
             
             ax_main.plot(x_coords, actual_y_positions, color=trace_color, linewidth=2, alpha=0.8)
             ax_main.fill_between(x_coords, y, actual_y_positions, alpha=0.2, color=trace_color)
+            
+            # --- Commented out roughness profile plot ---
+            # ax_rough.plot(interface_positions, x_coords, color=trace_color, linewidth=2, 
+            #              label=f'Y={int(y)} (R={interface_roughness[y]["roughness_nm"]:.2f}nm)')
         
         if y in interface_roughness:
             roughness_nm = interface_roughness[y]['roughness_nm']
@@ -1019,12 +1021,13 @@ def create_roughness_analysis_figure():
             ha = 'left' if i % 2 == 0 else 'right'
             roughness_text = f'R={roughness_nm:.3f}nm\n({roughness_pixels:.2f}px)'
             
-            # Increased font size from 8 to 10 to match thickness plot
             ax_main.text(text_x, y, roughness_text,
-                        color='white', fontsize=10, fontweight='bold',  # Changed from 8 to 10
+                        color='white', fontsize=14, fontweight='bold',
                         ha=ha, va='center',
-                        bbox=dict(boxstyle='round,pad=0.3',  # Slightly larger padding
+                        bbox=dict(boxstyle='round,pad=0.3', 
                                 facecolor=trace_color, alpha=0.8, edgecolor='white'))
+    
+
     
     # Add scale bar
     if pixel_size:
@@ -1043,6 +1046,7 @@ def create_roughness_analysis_figure():
                     ha='center', va='top',
                     bbox=dict(boxstyle='round,pad=0.2', facecolor='black', alpha=0.7))
     
+
     ax_main.axis('off')
     
     plt.tight_layout()
