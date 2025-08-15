@@ -853,7 +853,7 @@ def download_analysis_image():
         return jsonify({'error': str(e)})
 
 
-def calculate_interface_roughness(y_position, image_source, pixel_size, method='rms', window_size=25, all_interfaces=None):
+def calculate_interface_roughness(y_position, image_source, pixel_size, method='rms', window_size=15, all_interfaces=None, interface_index=None):
     """
     Calculate geometric interface roughness by tracking interface position variations
     
@@ -862,8 +862,9 @@ def calculate_interface_roughness(y_position, image_source, pixel_size, method='
         image_source: 2D numpy array (smoothed or original image)
         pixel_size: Pixel size in nm
         method: Roughness calculation method ('rms', 'ra', 'rmax')
-        window_size: Half-width of search window around nominal interface
+        window_size: Half-width of search window around nominal interface (default 15, overridden for 2nd interface)
         all_interfaces: List of all interface positions to avoid overlap
+        interface_index: Index of the interface (0-based) to determine window size
     
     Returns:
         dict: Roughness values in pixels and nm
@@ -872,8 +873,15 @@ def calculate_interface_roughness(y_position, image_source, pixel_size, method='
         height, width = image_source.shape
         y_pos = int(y_position)
         
+        # Set window size based on interface index
+        # 2nd interface (index 1) uses window_size = 25, all others use window_size = 15
+        if interface_index == 1:  # 2nd interface (0-based indexing)
+            base_window_size = 25
+        else:
+            base_window_size = 15
+        
         # Adaptive window size based on adjacent interfaces
-        adaptive_window = window_size
+        adaptive_window = base_window_size
         if all_interfaces is not None:
             interfaces = sorted([int(i) for i in all_interfaces])
             current_idx = None
@@ -946,7 +954,8 @@ def calculate_interface_roughness(y_position, image_source, pixel_size, method='
             'mean_deviation': float(np.mean(interface_positions)),
             'std_deviation': float(np.std(interface_positions)),
             'measurement_points': len(interface_positions),
-            'used_window_size': int(adaptive_window)  # Added for debugging
+            'used_window_size': int(adaptive_window),
+            'base_window_size': int(base_window_size)  # Added to track the base window size used
         }
         
     except Exception as e:
@@ -972,7 +981,12 @@ def create_roughness_analysis_figure():
     # Calculate roughness for each interface
     interface_roughness = {}
     for i, y in enumerate(all_peaks):
-        roughness_data = calculate_interface_roughness(y, smoothed_image, pixel_size)
+        # Pass interface index to determine window size
+        roughness_data = calculate_interface_roughness(
+            y, smoothed_image, pixel_size, 
+            all_interfaces=all_peaks, 
+            interface_index=i  # Pass the interface index
+        )
         if roughness_data['valid']:
             interface_roughness[y] = roughness_data
     
@@ -1010,22 +1024,20 @@ def create_roughness_analysis_figure():
             ax_main.plot(x_coords, actual_y_positions, color=trace_color, linewidth=2, alpha=0.8)
             ax_main.fill_between(x_coords, y, actual_y_positions, alpha=0.2, color=trace_color)
             
-
         if y in interface_roughness:
             roughness_nm = interface_roughness[y]['roughness_nm']
             roughness_pixels = interface_roughness[y]['roughness_pixels']
+            base_window = interface_roughness[y].get('base_window_size', 15)
             
             text_x = width * (0.02 if i % 2 == 0 else 0.98)
             ha = 'left' if i % 2 == 0 else 'right'
-            roughness_text = f'R={roughness_nm:.3f}nm\n({roughness_pixels:.2f}px)'
+            roughness_text = f'R={roughness_nm:.3f}nm\n({roughness_pixels:.2f}px)\nW={base_window}'
             
             ax_main.text(text_x, y, roughness_text,
                         color='white', fontsize=14, fontweight='bold',
                         ha=ha, va='center',
                         bbox=dict(boxstyle='round,pad=0.3', 
                                 facecolor=trace_color, alpha=0.8, edgecolor='white'))
-    
-
     
     # Add scale bar
     if pixel_size:
@@ -1044,7 +1056,6 @@ def create_roughness_analysis_figure():
                     ha='center', va='top',
                     bbox=dict(boxstyle='round,pad=0.2', facecolor='black', alpha=0.7))
     
-
     ax_main.axis('off')
     
     plt.tight_layout()
