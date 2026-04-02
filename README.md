@@ -1,4 +1,4 @@
-# thickness-mapping-webapp
+# AI-assisted Human-in-the-Loop Web Platform for Structural Characterization in Hard drive design
 ## [Link to writeup](https://arxiv.org/abs/2604.00359)
 
 <img width="989" height="711" alt="image" src="https://github.com/user-attachments/assets/85164679-5899-417a-b626-de7d499945c8" />
